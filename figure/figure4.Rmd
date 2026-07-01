@@ -1,0 +1,295 @@
+---
+title: "Figure 4"
+output: html_document
+date: "2026-05-02"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(tidyverse)
+library(mSigAct)
+library(ggh4x)
+library(ggpmisc)
+library(patchwork)
+library(MASS)
+library(ggpubr)
+```
+
+SBS22a detection vs mutation burden
+```{r}
+## Getting blood and urine TMB distributoin
+df <- data.table::fread("/mnt/data1/peter/repo/AAmanu/data/matGen/ds_filtered/output/SBS/UC_AA.SBS96.all") %>% as.data.frame()
+df_count <- as.data.frame(colSums(df[,-1])) %>% 'colnames<-' ("mutLoad") %>% rownames_to_column(var = "Samples")
+
+df_count %>% dplyr::filter(grepl(pattern = "Blood", x = Samples)) %>% pull(mutLoad) %>% median()
+df_count %>% dplyr::filter(grepl(pattern = "Blood", x = Samples)) %>% pull(mutLoad) %>% quantile()
+df_count %>% dplyr::filter(grepl(pattern = "Blood", x = Samples)) %>% pull(mutLoad) %>% min()
+df_count %>% dplyr::filter(grepl(pattern = "Blood", x = Samples)) %>% pull(mutLoad) %>% max()
+
+df_count %>% dplyr::filter(grepl(pattern = "Urine", x = Samples)) %>% pull(mutLoad) %>% median()
+df_count %>% dplyr::filter(grepl(pattern = "Urine", x = Samples)) %>% pull(mutLoad) %>% quantile()
+df_count %>% dplyr::filter(grepl(pattern = "Urine", x = Samples)) %>% pull(mutLoad) %>% min()
+df_count %>% dplyr::filter(grepl(pattern = "Urine", x = Samples)) %>% pull(mutLoad) %>% max()
+```
+
+## Blood and Urine
+```{r}
+## Load mSigAct attribution result for blood and urine samples
+## prior.sigs <- c("SBS1", "SBS5", "SBS22a", "SBS31", "SBS39", "SBS40a", "SBS100") 
+load("/mnt/data1/peter/repo/AAmanu/data/mSigAct/dsnogermline_uc_cosmic_updatedarnoud.rda")
+
+## Process data for plotting
+ds_res <- sparseAssign$proposed.assignment %>% t() %>% as.data.frame() %>%
+  sweep(1, rowSums(.), "/") %>% 
+  rownames_to_column(var = "Samples") %>%
+  gather(data = ., key = "signatures", value = "DS", -Samples) %>%
+  dplyr::filter(signatures == "SBS22a")
+
+boxplot_pd <- ds_res %>% mutate(type = case_when(grepl(pattern = "N", x = Samples) ~ "Normal",
+                                                 grepl(pattern = "T", x = Samples) ~ "Tumor",
+                                                 grepl(pattern = "_Blood", x = Samples) ~ "Blood",
+                                                 grepl(pattern = "_Urine", x = Samples) ~ "Urine",
+                                                 grepl(pattern = "_Kidney", x = Samples) ~ "Normal")) %>%
+  dplyr::filter(grepl(pattern = "Blood|Urine", x = Samples)) %>%
+  mutate(group = gsub(pattern = "_Blood|_Urine", replacement = "", x = Samples))
+
+## Factor order
+boxplot_pd$type <- factor(x = boxplot_pd$type, levels = c("Blood", "Urine"))
+
+## Color annotation
+color_anno <- c("#1B9E77", "black", "#D7191C", "#FDAE61")
+names(color_anno) <- c("Normal", "Tumor", "Blood", "Urine")
+
+## Wilcox test
+wp <- wilcox.test(DS ~ type, data = boxplot_pd)$p.value
+
+p10 <- ggplot(data = boxplot_pd, aes(x = type, y = DS, fill = type)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.5) +
+  geom_point(size = 1, color = "black") +
+  geom_line(aes(group = group), color = "black", linewidth = 0.15, alpha = 0.25) +
+  scale_y_continuous(limits = c(0, NA)) +
+  ylab("SBS22a Attribution") +
+  scale_fill_manual(values = color_anno) +
+  theme_bw() +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text = element_text(size = 6),
+        panel.grid = element_blank(),
+        legend.position = "none") +
+  annotate("text", 
+           x = 1.9, y = max(boxplot_pd$DS) * 1.05,
+           label = paste0("p = ", signif(wp, 3)),
+           size = 1.8)
+p10
+```
+
+Coverage simulation
+```{r}
+## Load mSigAct results to retrieve the number of samples by type that are positive and negative for SBS22a
+load("/mnt/data1/peter/repo/AAmanu/data/mSigAct/dsnogermline_uc_cosmic_updatedarnoud.rda")
+ds_res <- sparseAssign$proposed.assignment %>% t() %>% as.data.frame() %>%
+  sweep(1, rowSums(.), "/") %>% 
+  rownames_to_column(var = "Samples") %>%
+  gather(data = ., key = "signatures", value = "DS", -Samples) %>%
+  dplyr::filter(signatures == "SBS22a") %>%
+  mutate(type = case_when(grepl(pattern = "T", x = Samples) ~ "Tumor",
+                          grepl(pattern = "N", x = Samples) ~ "Normal",
+                          grepl(pattern = "Blood", x = Samples) ~ "Blood",
+                          grepl(pattern = "Urine", x = Samples) ~ "Urine"))
+
+## Number of samples that are positive and negative for SBS22a
+tot_n <- as.data.frame(table(ds_res$type, ds_res$DS > 0.05)) %>%
+  mutate(Var2 = ifelse(Var2 == TRUE, 1, 0))
+
+## Resampled each sample 10 times at every coverage and ran mSigAct
+# See code. /mnt/data1/peter/repo/AAmanu/code/coverage_simulation_30_15k.Rmd
+
+## Load mSigAct signature attribution result
+load("/mnt/data1/peter/repo/AAmanu/data/mSigAct/resamp_depth_30_15k_ds_uc_cosmic.rda")
+resamp_depth_res <- sparseAssign$proposed.assignment %>% t() %>% as.data.frame() %>%
+  sweep(1, rowSums(.), "/") %>%
+  mutate(across(where(is.numeric), ~ ifelse(.x < 0.05, 0, .x))) %>%
+  sweep(1, rowSums(.), "/") %>%
+  rownames_to_column(var = "Samples") %>%
+  mutate(replicate = sub("_[^_]+$", "", Samples),
+         group = sub("_[^_]+$", "", replicate),
+         replicate = sub(".*_", "", replicate),
+         coverage = sub(".*_", "", Samples))
+
+## Summarizing the resamping depth experiment. not all samples were a perfect 10 runs. Some dropped out due to low mutation count
+number_rep_per_samp <- resamp_depth_res %>% count(group, coverage) %>%
+  left_join(x = ., y = ds_res[, c("Samples", "DS", "type")], by = c("group"="Samples")) %>% 
+  mutate(hr_status = ifelse(DS > 0.05, 1, 0)) ## This is SBS22a status from the original mSigAct result
+
+# average at each iteration
+resamp.mean <- resamp_depth_res %>%
+  dplyr::group_by(group, coverage) %>%
+  dplyr::summarise(value = mean(SBS22a), .groups = "drop_last")
+
+## Factor order
+resamp_depth_res$coverage <- factor(x = resamp_depth_res$coverage,
+                                    levels = as.character(c(30, 60, 80, 100, 200, 500, 1000, 2000, 4000, 8000, 10000, 12500, 15000))) 
+
+resamp_depth_res$group <- factor(x = resamp_depth_res$group,
+                                   levels = c("UC2T", "UC2N", "UC4T", "UC4N", "UC5T", "UC5N", "UC7T", "UC7N", "UC7_Blood",
+                                              "UC10T", "UC10N", "UC11T", "UC11N", "UC13T", "UC13N", "UC14T", "UC14N", "UC14_Blood",
+                                              "UC14_Urine", "UC18T", "UC18N", "UC18_Blood", "UC18_Urine", "UC19T", "UC19N", "UC19_Blood",
+                                              "UC19_Urine", "UC26T", "UC26N", "UC34T", "UC34N", "UC34_Blood"))
+
+## Process data for plotting
+pd <- resamp_depth_res %>%
+  left_join(x = ., y = ds_res[,c("Samples", "DS")], by = c("group"="Samples")) %>%
+  mutate(status = DS,
+         type = case_when(grepl(pattern = "_Blood", x = Samples) ~ "Blood",
+                          grepl(pattern = "_Urine", x = Samples) ~ "Urine",
+                          grepl(pattern = "_Kidney", x = Samples) ~ "Normal",
+                          grepl(pattern = "T", x = Samples) ~ "Tumor",
+                          grepl(pattern = "N", x = Samples) ~ "Normal"),
+         hr_status = ifelse(status > 0.05, "Detected", "Undetected"))
+
+## Get mean/sd/ci
+typeerror.pd <- pd %>%
+  group_by(coverage, type, hr_status) %>%
+  summarise(
+    mean = mean(SBS22a, na.rm = TRUE),
+    sd = sd(SBS22a, na.rm = TRUE),
+    n = sum(!is.na(SBS22a)),
+    se = sd / sqrt(n),
+    ci = qt(0.975, df = n - 1) * se
+  ) %>%
+  mutate(
+    lwr = mean - ci,
+    upr = mean + ci
+  )
+
+## Factor order
+typeerror.pd$type <- factor(x = typeerror.pd$type, levels = c("Tumor", "Normal","Blood", "Urine"))
+status.col <- c("grey50", "firebrick3", "black")
+names(status.col) <- c("Undetected", "Detected", "Proportion Detected")
+
+## Getting the total number of samples per type and coverage for proportion calculation
+nsamp_per_coverage_per_hr_status_per_tissue_type <- number_rep_per_samp %>%
+  dplyr::group_by(type, coverage, hr_status) %>%
+  dplyr::summarise(tot_n = sum(n))
+
+## Calculating how many samples were detected with mSigAct
+hits <- pd %>% mutate(hr_status = ifelse(hr_status == "Detected", 1, 0)) %>%
+  dplyr::group_by(type, coverage, hr_status) %>%
+  dplyr::summarise(n_sbs22a = sum(SBS22a > 0, na.rm = TRUE),
+    .groups = "drop") %>%
+  left_join(x = ., y = nsamp_per_coverage_per_hr_status_per_tissue_type, 
+            by = c("type", "coverage", "hr_status")) %>%
+  mutate(prop = n_sbs22a / tot_n,
+         hr_status = ifelse(hr_status == 1, "Detected", "Undetected"))
+
+## Factor order again
+typeerror.pd <- typeerror.pd %>% left_join(x = ., y = hits, by = c("coverage", "type", "hr_status"))
+typeerror.pd[is.na(typeerror.pd)] <- 0
+
+typeerror.pd$coverage <- factor(x = typeerror.pd$coverage,
+                                    levels = as.character(c(30, 60, 80, 100, 200, 500, 1000, 2000, 4000, 8000, 10000, 12500, 15000)))
+
+typeerror.pd <- typeerror.pd %>% dplyr::filter(hr_status == "Detected")
+typeerror.pd$type <- factor(x = typeerror.pd$type, levels = c("Tumor", "Normal", "Blood", "Urine"))
+
+## Color annotation
+color_anno <- c("#A6A6A6", "#4F81BD", "#D7191C", "#FDAE61")
+names(color_anno) <- c("Normal", "Tumor", "Blood", "Urine")
+
+p11 <- ggplot(data = typeerror.pd, aes(x = coverage, y = prop, color = type, group = type)) +
+  geom_line(linewidth = 0.5) +
+  geom_hline(yintercept = 0.9, linetype = "dashed", linewidth = 0.25, color = "black") +
+  annotate("text",
+           x = 4.25,
+           y = 0.93,
+           label = "90% recovered",
+           hjust = 1,
+           size = 1.8) +
+  scale_color_manual(values = color_anno) +
+  ylab("Fraction Recovered") + xlab("Simulated Duplex Depth") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 6),
+        axis.text.y = element_text(size = 6),
+        axis.title = element_text(size = 8),
+        strip.background = element_blank(), 
+        panel.grid = element_blank(),
+        strip.text = element_text(size = 6, margin = margin(b = 0, t = 0)),
+        panel.spacing = unit(0.1, "lines"),
+        legend.title = element_blank(),
+        legend.key.size = unit(0.2, "cm"),
+        legend.position = c(0.95, 0.98),
+        legend.direction = "horizontal",
+        legend.justification = c(1, 0),
+        legend.background = element_blank(),
+        legend.key = element_blank(),
+        legend.text = element_text(size = 5))
+```
+
+Checking correlation between sbs22a attribution between tissue (tumor/normal) and non-invasive (blood/urine)
+```{r}
+load("/mnt/data1/peter/repo/AAmanu/data/mSigAct/dsnogermline_uc_cosmic_updatedarnoud.rda")
+
+ds_res <- sparseAssign$proposed.assignment %>% t() %>% as.data.frame() %>%
+  sweep(1, rowSums(.), "/") %>% 
+  rownames_to_column(var = "Samples") %>%
+  gather(data = ., key = "signatures", value = "DS", -Samples) %>%
+  dplyr::filter(signatures == "SBS22a") %>%
+  mutate(type = case_when(grepl(pattern = "T", x = Samples) ~ "Tumor",
+                          grepl(pattern = "N", x = Samples) ~ "Normal",
+                          grepl(pattern = "Blood", x = Samples) ~ "Blood",
+                          grepl(pattern = "Urine", x = Samples) ~ "Urine"),
+         group = paste0("UC", as.numeric(str_extract(Samples, "\\d+"))))
+
+blood_samp <- ds_res$Samples[grepl(pattern = "Blood", x = ds_res$Samples)] %>% 
+  gsub(pattern = "\\_.*", replacement = "", x = .)
+
+df1 <- ds_res %>% dplyr::filter(group %in% blood_samp) %>%
+  dplyr::select(-Samples, -signatures) %>%
+  spread(data = ., key = type, value = DS)
+
+## Correlation with tumor and blood?
+cor.test(df1$Tumor,
+         df1$Blood,
+         method = "spearman")
+## Correlation with normal and blood?
+cor.test(df1$Normal,
+         df1$Blood,
+         method = "spearman")
+
+## Now do it for urine
+df2 <- df1 %>% dplyr::filter(!if_any(everything(), is.na))
+## Tumor and urine?
+cor.test(df2$Tumor,
+         df2$Urine,
+         method = "spearman")
+## Normal and urine?
+cor.test(df2$Normal,
+         df2$Urine,
+         method = "spearman")
+
+```
+
+```{r}
+layout <- "
+ABBBZZZZ
+ABBBZZZZ
+YYYYYYYY
+YYYYYYYY
+YYYYYYYY
+YYYYYYYY
+YYYYYYYY
+YYYYYYYY"
+
+set.seed(514)
+combined_plot1 <- p10 + p11 + plot_layout(design=layout) + 
+  plot_annotation(tag_levels = list(c("A", "B", "C", "D", "E", "F", "G"))) &
+  theme(plot.tag = element_text(face = 'bold', size = 10),
+        text = element_text(family = "Arial"))
+
+ggsave("/mnt/data1/peter/repo/AAmanu/figure/figure4.png", 
+       width = 170, height = 170,
+       units = "mm", dpi = 600)
+
+```
+
