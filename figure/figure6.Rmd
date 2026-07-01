@@ -1,0 +1,326 @@
+---
+title: "figure 6"
+output: html_document
+date: "2026-04-27"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(tidyverse)
+library(patchwork)
+library(ggh4x)
+library(SigRescueR)
+library(mSigAct)
+library(ggbeeswarm)
+```
+
+wga data
+```{r}
+wga <- data.table::fread("/mnt/data1/peter/repo/AAmanu/data/HDP_input_ImmuneCells.csv") %>% as.data.frame() %>%
+  dplyr::rename("MutationType"="Mutation type") %>%
+  mutate(MutationType = paste0(substring(Trinucleotide,1,1), "[",
+                               MutationType,
+                               "]", substring(Trinucleotide,3,3))) %>%
+  dplyr::select(-Trinucleotide)
+
+# write.table(wga, file = "/mnt/storage/peter/repo/manuAA/data/wga_uc_bloodfraction.txt",
+#             row.names = FALSE, quote = FALSE, sep = "\t")
+
+## Cleaned PBMC samples with WGA cell line data
+# Rscript //mnt/storage/peter/repo/manuAA/code/wga_bloodfraction_sr_wga.R
+
+load("/mnt/data1/peter/repo/AAmanu/data/SigRescueR/wga_bloodfraction_sr_wga.rda")
+SigRescueR::SigRescueAnalyze(res = res)
+# SigRescueR::SigRescuePlot(res = res, context = "96", 
+#                           output_path = "/mnt/storage/peter/repo/manuAA/data/wga_bf_sr_wga/",
+#                           filename = "wga_bf_sr_wga")
+
+samp.cleaned <- samp.cleaned %>% mutate(across(where(is.numeric), \(x) round(x, 0)))
+
+write.table(samp.cleaned, file = "/mnt/storage/peter/repo/manuAA/data/wga_bf_sr_wga/wga_uc_bloodfraction.txt",
+            row.names = FALSE, quote = FALSE, sep = "\t")
+
+## Run SPE
+# python /mnt/data1/peter/repo/AAmanu/code/spe_wga_bloodfraction_uc_sbs.py
+
+# load reference signatures
+ref.sigs <- ICAMS::ReadCatalog("/mnt/data1/peter/repo/AAmanu/data/spe/wga_uc_bloodfraction_sbs/SBS96/Suggested_Solution/COSMIC_SBS96_Decomposed_Solution/Signatures/COSMIC_SBS96_Signatures.txt")
+ref.sigs <- ICAMS::as.catalog(ref.sigs,
+                              ref.genome = "GRCh38",
+                              region = "genome",
+                              catalog.type = "counts.signature")
+
+prior.sigs <- colnames(ref.sigs)
+
+input_file <- "/mnt/storage/peter/repo/manuAA/data/wga_bf_sr_wga/wga_uc_bloodfraction.txt"
+input_catalog <- ICAMS::ReadCatalog(file = input_file)
+
+## Signature attribution with mSigAct
+sparseAssign <- SparseAssignActivity(spectra = input_catalog,
+                                     sigs = ref.sigs[,prior.sigs],
+                                     max.level = length(prior.sigs)-1,
+                                     p.thresh = 0.05/length(prior.sigs),
+                                     num.parallel.samples = 5,
+                                     mc.cores.per.sample = 20,
+                                     drop.low.mut.samples = FALSE,
+                                     seed = 425,
+                                     output.dir = "/mnt/storage/peter/repo/manuAA/data/mSigAct/wga_uc_cosmic_srWGA")
+
+# save(sparseAssign, file = "/mnt/data1/peter/repo/AAmanu/data/mSigAct/wga_uc_cosmic_srWGA.rda")
+```
+
+WGA results
+```{r}
+## WGS result from figure 1
+load("/mnt/data1/peter/repo/AAmanu/data/mSigAct/wga_uc_cosmic_srWGA.rda")
+
+mSigAct_pd <- sparseAssign$proposed.assignment %>% t() %>% as.data.frame() %>%
+  'rownames<-' (gsub(pattern = "PBMC::", replacement = "", x = rownames(.))) %>%
+  'rownames<-' (gsub(pattern = "-cell", replacement = "", x = rownames(.))) %>%
+  dplyr::filter(!grepl("WGA", rownames(.))) %>%
+  sweep(1, rowSums(.), "/") %>%
+  mutate(across(everything(), ~ ifelse(is.na(.), 0, .))) %>%
+  rownames_to_column(var = "Samples") %>% 
+  gather(data = ., key = "signatures", value = "value", -Samples) %>%
+  mutate(group = paste0("UC", as.numeric(str_extract(Samples, "\\d+"))),
+         type = gsub(pattern = "^[^_]*_", replacement = "", x = Samples)) %>%
+  mutate(type = ifelse(type == "myeloid_1", "Myeloid_1", type)) %>%
+  mutate(type = gsub(pattern = "\\_", replacement = "", x = type)) %>%
+  mutate(type = gsub(pattern = "Myeloid", replacement = "M", x = type))
+
+sample.order <- c("UC2", "UC4", "UC5", "UC7", "UC10", "UC11", "UC13", "UC14", "UC18", "UC19", "UC26", "UC34")
+
+## Factor level
+mSigAct_pd$group <- factor(x = mSigAct_pd$group, levels = sample.order)
+mSigAct_pd$type <- factor(x = mSigAct_pd$type, 
+                        levels = c("B1", "B2", "B5", "T1", "T2", "T3", "T4", "T4b", "T6", "T7", "NK1", "NK2", "NK3", 
+                                   "M1", "M2"))
+mSigAct_pd$signatures <- factor(x = mSigAct_pd$signatures, 
+                                levels = c("SBS1",  "SBS5", "SBS22a", "SBS36", "SBS45", "SBS95"))
+
+## pch according to batch
+mSigAct_pd$batchPch<-NA
+mSigAct_pd$batchPch[grep("UC4_|UC5_|UC7_|UC14_T-cell_4",mSigAct_pd$Samples)]<- "Batch1"
+mSigAct_pd$batchPch[grepl("UC14_",mSigAct_pd$Samples) & !mSigAct_pd$Samples == "UC14_T-cell_4"]<- "Batch2"
+mSigAct_pd$batchPch[grep("UC18_|UC34_",mSigAct_pd$Samples)]<- "Batch3"
+
+## Relabel celltype column
+mSigAct_pd <- mSigAct_pd %>% mutate(celltype = case_when(grepl("T", type) ~ "T-cell",
+                                                         grepl("B", type) ~ "B-cell",
+                                                         grepl("NK", type) ~ "NK-cell",
+                                                         grepl("M", type) ~ "Myeloid"))
+
+## Factor order some more
+mSigAct_pd$celltype <- factor(x = mSigAct_pd$celltype, levels = c("B-cell", "T-cell", "NK-cell", "Myeloid"))
+
+## Shape annotation
+batch_anno <- c(2, 8, 20)
+names(batch_anno) <- c("Batch1", "Batch2", "Batch3")
+## Color annotation
+type_anno <- c("blue","darkgreen","orange","purple")
+names(type_anno) <- c("B-cell", "NK-cell", "T-cell", "Myeloid")
+
+p3 <- ggplot(mSigAct_pd, aes(x = signatures, y = value)) +
+  geom_quasirandom(aes(shape = batchPch, color = celltype), size = 1, width = 0.1) +
+  scale_shape_manual(values = batch_anno, name = "Batch") +
+  scale_color_manual(values = type_anno, name = "Cell Type") +
+  ylab("Signature Attribution") + xlab("scWGS") +
+  theme_bw() +
+  theme(axis.title.x = element_text(size = 8),
+        axis.title.y = element_text(size = 8),
+        axis.text = element_text(size = 6),
+        axis.ticks.x = element_blank(),
+        panel.grid = element_blank(),
+        legend.title = element_text(size = 6),
+        legend.key.size = unit(0.2, "cm"),
+        legend.text = element_text(size = 5),
+        legend.margin = margin(0, 0, 0, 0),
+        legend.box.margin = margin(0, -5, 0, -5))
+```
+
+How many SBS22a positive? (intext)
+```{r}
+mSigAct_pd %>% dplyr::filter(signatures == "SBS22a",
+                             value > 0.05)
+```
+
+Enrichment analysis for cell type (intext)
+```{r}
+## New column to transform t b and nkcell to Lymphoid
+mSigAct_pd$lineage <- ifelse(mSigAct_pd$celltype == "Myeloid", "Myeloid", "Lymphoid")
+signatures <- unique(as.character(mSigAct_pd$signatures))
+
+# Haldane–Anscombe correction because zero cell count present
+ha_or <- function(tab) {
+  stopifnot(all(dim(tab) == c(2, 2)))
+  tab <- tab + 0.5
+  or <- (tab[2,2] * tab[1,1]) /
+        (tab[2,1] * tab[1,2])
+  return(or)
+}
+
+## Loop though each and perform fisher exact test
+lineage_res <- list()
+
+for (b in unique(mSigAct_pd$celltype)) {
+  for(s in signatures) {
+    sel_df <- mSigAct_pd %>% dplyr::filter(signatures == s) %>%
+      mutate(status = ifelse(value > 0.05, 1, 0),
+             obslineage = ifelse(celltype == b, 1, 0))
+    tab <- table(sel_df$obslineage,
+                 sel_df$status)
+    ft <- fisher.test(tab)
+    
+    or_ha <- ha_or(tab)
+  
+    case <- paste(b, s, sep = "_")
+    
+    lineage_res[[case]] <- data.frame(
+      Batch = b,
+      Signatures = s,
+      odds_ratio = unname(ft$estimate),
+      or_ha = or_ha,
+      lower_CI = ft$conf.int[1],
+      upper_CI = ft$conf.int[2],
+      p_value = ft$p.value)
+  }
+}
+
+## List to DF and FDR correction
+lineage_res <- as.data.frame(do.call(rbind, lineage_res))
+lineage_res$FDR <- p.adjust(lineage_res$p_value, method = "BH")
+```
+
+Panel B Forest plot showing odd ratios of signatures across cell type
+```{r}
+## Limit the x axis sometimes too large
+xmin <- 1e-3 
+xmax <- 500
+
+## Process data to get HA OR, lower and upper with the xaxis limits
+plot_df <- lineage_res %>%
+  mutate(
+    OR_plot = pmin(or_ha, xmax),
+    upper_plot = pmin(upper_CI, xmax),
+    inf = is.infinite(upper_CI)
+  )
+
+plot_df$lower_CI[plot_df$lower_CI == 0] <- xmin  # 0 to 1e-3 so doesnt get affected by log10 transformation
+
+## Factor order
+plot_df$Signatures <- factor(x = plot_df$Signatures, 
+                             levels = rev(c("SBS1", "SBS5", "SBS22a", "SBS36", "SBS45", "SBS95")))
+
+plot_df$Batch <- factor(x = plot_df$Batch, levels = c("B-cell", "T-cell", "NK-cell", "Myeloid"))
+
+p1 <- ggplot(plot_df, aes(x = OR_plot, y = Signatures)) +
+  geom_errorbarh(aes(xmin = lower_CI,
+                     xmax = upper_plot),
+                 height = 0.2,
+                 linewidth = 0.25) +
+  geom_point(size = 0.5) +
+  facet_wrap(.~Batch) +
+  scale_x_log10(breaks = 10^(-4:4), labels = -4:4) +
+  geom_vline(xintercept = 1, linetype = 2, colour = "grey50", linewidth = 0.25) +
+  ## Arrow for infinite CI
+  geom_segment(
+    data = subset(plot_df, inf),
+    aes(x = xmax * 0.8,
+        xend = xmax * 0.85,
+        y = Signatures,
+        yend = Signatures),
+    arrow = arrow(type = "closed",
+                  length = unit(0.1, "cm")),
+    inherit.aes = FALSE) +
+  xlab(expression(log[10](OR))) + ggtitle("scWGS") +
+  theme_bw() +
+  theme(axis.title.x = element_text(size = 8),
+        axis.title.y = element_blank(),
+        plot.title = element_text(size = 8, hjust = 0.5, margin = margin(0,0,0,0)),
+        axis.text = element_text(size = 6),
+        panel.grid = element_blank(),
+        panel.spacing = unit(0.2, "lines"),
+        strip.background = element_blank(),
+        strip.text = element_text(size = 8, margin = margin(0,0,0,0)),
+        plot.margin = margin(0,0,0,0))
+```
+
+Panel C: Complement scWGS with DS
+```{r}
+## scWGS data; keep only sbs22a attribution
+scWGS_sbs22 <- mSigAct_pd %>% dplyr::filter(signatures == "SBS22a")
+
+## DS data; process and keep sbs22a attribution
+load("/mnt/data1/peter/repo/AAmanu/data/mSigAct/cleanedsbs31uc14_dsBloodFraction_cosmic_mSigAct.rda") ## UC14 was cleaned using SR
+ds_sbs22 <- sparseAssign$proposed.assignment %>% t() %>% as.data.frame() %>%
+  sweep(1, rowSums(.), "/") %>%
+  mutate(across(everything(), ~ ifelse(is.na(.), 0, .))) %>%
+  rownames_to_column(var = "Samples") %>% 
+  gather(data = ., key = "signatures", value = "value", -Samples) %>%
+  mutate(group = paste0("UC", as.numeric(str_extract(Samples, "\\d+"))),
+         type = case_when(grepl(pattern = "T-cell", x = Samples) ~ "T-cell",
+                          grepl(pattern = "B-cell", x = Samples) ~ "B-cell",
+                          grepl(pattern = "NK-cell", x = Samples) ~ "NK-cell",
+                          grepl(pattern = "Myeloid", x = Samples) ~ "Myeloid")) %>%
+  dplyr::filter(signatures == "SBS22a")
+
+## Factor order
+ds_sbs22$group <- factor(x = ds_sbs22$group, levels = c("UC4", "UC5", "UC7", "UC14"))
+ds_sbs22$status <- ifelse(ds_sbs22$group == "UC5", "Negative", "Positive")
+
+## color annotation
+color_anno <- c("#803E75", "#FF6800", "#A6BDD7", "#C10020", "#CEA262", "#007D34", "#00538A")
+names(color_anno) <- c("UC7", "UC14", "UC18", "UC19", "UC34", "UC4", "UC5")
+
+## shape annotation
+shape_anno <- c(5,6)
+names(shape_anno) <- c("Positive", "Negative")
+
+p4 <- ggplot(data = scWGS_sbs22, aes(x = celltype, y = value)) +
+  geom_boxplot(outlier.shape = NA,   fill = "grey85", color = "grey70", linewidth = 0.4, alpha = 0.3) +
+  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.25) +
+  geom_point(data = ds_sbs22, aes(x = type, y = value, color = group, shape = status),
+    size = 1,
+    position = position_jitter(width = 0.12)
+  ) +
+  scale_color_manual(values = color_anno, name = "Patient") +
+  scale_shape_manual(values = shape_anno, name = "SBS22a\nby WGS") +
+  ylab("SBS22a Attribution") + xlab("DS") +
+  theme_bw() +
+  guides(shape = guide_legend(order = 1),
+         color = guide_legend(order = 2)) +
+  theme(panel.grid = element_blank(),
+        axis.title.x = element_text(size = 8),
+        axis.title.y = element_text(size = 8),
+        axis.text = element_text(size = 6),
+        legend.title = element_text(size = 6),
+        legend.key.size = unit(0.2, "cm"),
+        legend.text = element_text(size = 5),
+        legend.margin = margin(0, 0, 0, 0),
+        legend.box.margin = margin(0, -5, 0, -5))
+```
+
+
+```{r}
+layout <- "
+AAAACCCC
+AAAACCCC
+BBBBCCCC
+BBBBCCCC
+YYYYYYYY
+YYYYYYYY
+YYYYYYYY
+YYYYYYYY
+YYYYYYYY"
+
+set.seed(425)
+combined_plot1 <- free(p3) + free(p4) + p1 + plot_layout(design=layout) + #
+  plot_annotation(tag_levels = list(c("A", "C", "B", "", "", "", ""))) &
+  theme(plot.tag = element_text(face = 'bold', size = 10),
+        text = element_text(family = "Arial"))
+
+ggsave("/mnt/data1/peter/repo/AAmanu/figure/figure6.png", 
+       width = 170, height = 170,
+       units = "mm", dpi = 600)
+```

@@ -1,0 +1,977 @@
+---
+title: "Figure 5"
+output: html_document
+date: "2026-06-05"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(tidyverse)
+library(mSigAct)
+library(patchwork)
+```
+
+## Run mSigAct on clonal and nonclonal
+```{r}
+# load reference signatures (COSMIC v3.6)
+ref.sigs <- ICAMS::ReadCatalog("/mnt/data1/peter/repo/AAmanu/data/COSMIC_Human_SBS-96_GRCh38_v3.6.tsv")
+ref.sigs <- ICAMS::as.catalog(ref.sigs,
+                              ref.genome = "GRCh38",
+                              region = "genome",
+                              catalog.type = "counts.signature")
+
+# The Duplex Sequencing only targets a small part of the human genome
+# calculate the trinucleotide composition of the DS target region
+# and adjust the reference signatures to take this difference into account
+DS.target.BED<-ICAMS:::ReadBedRanges("/mnt/storage/peter/steve_aa/AA_normal_blood_tumors_DS_WGS_singleCells_SteveRozen_Arnoud/TwinstrandDraft/Supplementary/Supplemental_code/input/Twinstrand.bed")
+DS_abundance<-ICAMS:::GetCustomKmerCounts(k = 3,
+                                          ref.genome = "GRCh38",
+                                          custom.ranges = DS.target.BED)
+DS_abundance<-ICAMS:::Collapse192AbundanceTo96(DS_abundance[,1])
+ref.sigs.DS<-ICAMS::TransformCatalog(ref.sigs,
+                                     target.ref.genome = NULL,
+                                     target.region = "unknown",
+                                     target.catalog.type = "counts.signature",
+                                     target.abundance = DS_abundance)
+
+prior.sigs <- c("SBS1", "SBS5", "SBS22a", "SBS39", "SBS40a", "SBS100", "SBS31") ## SBS31 added because UC14 was treated with cisplatin
+
+input_file <- "/mnt/data1/peter/repo/AAmanu/data/matGen/ds_filtered_clonal/output/SBS/UC_AA.SBS96.all"
+input_catalog <- ICAMS::ReadCatalog(file = input_file)
+
+sparseAssign <- SparseAssignActivity(spectra = input_catalog,
+                                     sigs = ref.sigs.DS[,prior.sigs],
+                                     max.level = length(prior.sigs)-1,
+                                     p.thresh = 0.05/length(prior.sigs),
+                                     num.parallel.samples = 5,
+                                     mc.cores.per.sample = 20,
+                                     drop.low.mut.samples = FALSE,
+                                     seed = 425,
+                                     output.dir = "/mnt/storage/peter/repo/manuAA/data/mSigAct/dsnogermlineClonal_uc_cosmic_arnoud")
+# save(sparseAssign, file = "/mnt/data1/peter/repo/AAmanu/data/mSigAct/dsnogermlineClonal_uc_cosmic_arnoud.rda")
+
+prior.sigs <- c("SBS1", "SBS5", "SBS22a", "SBS39", "SBS40a", "SBS100")
+
+sparseAssign <- SparseAssignActivity(spectra = input_catalog,
+                                     sigs = ref.sigs.DS[,prior.sigs],
+                                     max.level = length(prior.sigs)-1,
+                                     p.thresh = 0.05/length(prior.sigs),
+                                     num.parallel.samples = 5,
+                                     mc.cores.per.sample = 20,
+                                     drop.low.mut.samples = FALSE,
+                                     seed = 425,
+                                     output.dir = "/mnt/storage/peter/repo/manuAA/data/mSigAct/dsnogermlineClonal_uc_cosmic_arnoud_noSBS31")
+# save(sparseAssign, file = "/mnt/data1/peter/repo/AAmanu/data/mSigAct/dsnogermlineClonal_uc_cosmic_arnoud_noSBS31.rda")
+
+input_file <- "/mnt/data1/peter/repo/AAmanu/data/matGen/ds_filtered_nonclonal/output/SBS/UC_AA.SBS96.all"
+input_catalog <- ICAMS::ReadCatalog(file = input_file)
+
+prior.sigs <- c("SBS1", "SBS5", "SBS22a", "SBS39", "SBS40a", "SBS100", "SBS31")
+
+sparseAssign <- SparseAssignActivity(spectra = input_catalog,
+                                     sigs = ref.sigs.DS[,prior.sigs],
+                                     max.level = length(prior.sigs)-1,
+                                     p.thresh = 0.05/length(prior.sigs),
+                                     num.parallel.samples = 5,
+                                     mc.cores.per.sample = 20,
+                                     drop.low.mut.samples = FALSE,
+                                     seed = 425,
+                                     output.dir = "/mnt/storage/peter/repo/manuAA/data/mSigAct/dsnogermlineNonClonal_uc_cosmic_arnoud")
+# save(sparseAssign, file = "/mnt/data1/peter/repo/AAmanu/data/mSigAct/dsnogermlineNonClonal_uc_cosmic_arnoud.rda")
+
+prior.sigs <- c("SBS1", "SBS5", "SBS22a", "SBS39", "SBS40a", "SBS100")
+
+sparseAssign <- SparseAssignActivity(spectra = input_catalog,
+                                     sigs = ref.sigs.DS[,prior.sigs],
+                                     max.level = length(prior.sigs)-1,
+                                     p.thresh = 0.05/length(prior.sigs),
+                                     num.parallel.samples = 5,
+                                     mc.cores.per.sample = 20,
+                                     drop.low.mut.samples = FALSE,
+                                     seed = 425,
+                                     output.dir = "/mnt/storage/peter/repo/manuAA/data/mSigAct/dsnogermlineNonClonal_uc_cosmic_arnoud_noSBS31")
+# save(sparseAssign, file = "/mnt/data1/peter/repo/AAmanu/data//mSigAct/dsnogermlineNonClonal_uc_cosmic_arnoud_noSBS31.rda")
+```
+
+Panel A (left) comparing Clonal vs Nonclonal for SBS22a attribution
+```{r}
+## Clonal signature attribution res with mSigAct (Filter for UC14 samples)
+load("/mnt/data1/peter/repo/AAmanu/data/mSigAct/dsnogermlineClonal_uc_cosmic_arnoud.rda")
+## Clonal tmb per sample
+assignment_tmb_clonal <- sparseAssign$proposed.assignment %>% t() %>% as.data.frame()
+## Signature attribution per sample
+assignment_res_clonal <- sparseAssign$proposed.assignment %>% t() %>% as.data.frame() %>%
+  sweep(1, rowSums(.), "/") %>%
+  mutate(across(where(is.numeric), ~ ifelse(.x < 0.05, 0, .x))) %>%
+  sweep(1, rowSums(.), "/") %>%
+  rownames_to_column(var = "Samples") %>%
+  dplyr::filter(grepl(pattern = "UC14", x = Samples))
+
+## Clonal without SBS31 in the universe (Remove UC14 samples)
+load("/mnt/data1/peter/repo/AAmanu/data/mSigAct/dsnogermlineClonal_uc_cosmic_arnoud_noSBS31.rda")
+assignment_res_clonal2 <- sparseAssign$proposed.assignment %>% t() %>% as.data.frame() %>%
+  sweep(1, rowSums(.), "/") %>%
+  mutate(across(where(is.numeric), ~ ifelse(.x < 0.05, 0, .x))) %>%
+  sweep(1, rowSums(.), "/") %>%
+  rownames_to_column(var = "Samples") %>%
+  dplyr::filter(!grepl(pattern = "UC14", x = Samples)) %>%
+  mutate(SBS31 = 0)
+
+## Combine the two df together
+assignment_res_clonal <- rbind(assignment_res_clonal, assignment_res_clonal2)
+
+## Do the same thing for NonClonal
+load("/mnt/data1/peter/repo/AAmanu/data/mSigAct/dsnogermlineNonClonal_uc_cosmic_arnoud.rda")
+
+assignment_tmb_nonclonal <- sparseAssign$proposed.assignment %>% t() %>% as.data.frame()
+
+assignment_res_nonclonal <- sparseAssign$proposed.assignment %>% t() %>% as.data.frame() %>%
+  sweep(1, rowSums(.), "/") %>%
+  mutate(across(where(is.numeric), ~ ifelse(.x < 0.05, 0, .x))) %>%
+  sweep(1, rowSums(.), "/") %>%
+  rownames_to_column(var = "Samples") %>%
+  dplyr::filter(grepl(pattern = "UC14", x = Samples))
+
+load("/mnt/data1/peter/repo/AAmanu/data/mSigAct/dsnogermlineNonClonal_uc_cosmic_arnoud_noSBS31.rda")
+
+assignment_res_nonclonal2 <- sparseAssign$proposed.assignment %>% t() %>% as.data.frame() %>%
+  sweep(1, rowSums(.), "/") %>%
+  mutate(across(where(is.numeric), ~ ifelse(.x < 0.05, 0, .x))) %>%
+  sweep(1, rowSums(.), "/") %>%
+  rownames_to_column(var = "Samples") %>%
+  dplyr::filter(!grepl(pattern = "UC14", x = Samples)) %>%
+  mutate(SBS31 = 0)
+
+assignment_res_nonclonal <- rbind(assignment_res_nonclonal, assignment_res_nonclonal2)
+
+## Subset for SBS22a attribution and rename based on if its clonal or nonclonal
+ds_nonclonal <- assignment_res_nonclonal %>% dplyr::select(Samples, SBS22a) %>%
+  dplyr::rename("NonClonal" = "SBS22a")
+
+ds_clonal <- assignment_res_clonal %>% dplyr::select(Samples,SBS22a) %>%
+  dplyr::rename("Clonal" = "SBS22a")
+
+## Combine the data together
+combined_all_clonal <- ds_nonclonal %>% left_join(x = ., y = ds_clonal, by = "Samples") %>%
+  dplyr::filter(NonClonal > 0) %>%
+  dplyr::select(Samples, Clonal, NonClonal) %>%
+  gather(data = ., key = "Mutation", value = "value", -Samples) %>%
+  mutate(type = case_when(grepl(pattern = "N", x = Samples) ~ "N",
+                          grepl(pattern = "T", x = Samples) ~ "T",
+                          grepl(pattern = "Blood", x = Samples) ~ "B",
+                          grepl(pattern = "Urine", x = Samples) ~ "U"),
+         group = paste0("UC", as.numeric(str_extract(Samples, "\\d+"))))
+
+## Factor order
+combined_all_clonal$Mutation <- factor(x = combined_all_clonal$Mutation, levels = c("NonClonal", "Clonal"))
+combined_all_clonal$type <- factor(x = combined_all_clonal$type, levels = c("T", "N","B", "U"))
+
+## Color annotation
+color_anno <- c("#A6A6A6", "#4F81BD", "#D7191C", "#FDAE61")
+names(color_anno) <- c("N", "T", "B", "U")
+
+##############
+## plotting ##
+
+## Clonal and SBS22a attribution
+p10 <- ggplot(data = combined_all_clonal %>% dplyr::filter(Mutation == "Clonal"), aes(x = type, y = value)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.5, aes(fill = type)) +
+  geom_jitter(width = 0.15, size = 0.5, color = "black", shape = 21) +
+  scale_y_continuous(limits = c(-0.05, 1.05),
+                     breaks = seq(0, 1, by = 0.25)) +
+  ylab("SBS22a Attribution") + ggtitle("Clonal") +
+  scale_fill_manual(values = color_anno) +
+  theme_bw() +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text = element_text(size = 6),
+        plot.title = element_text(size = 8, hjust = 0.5, margin = margin(b=0)),
+        panel.grid = element_blank(),
+        plot.margin = margin(0,5,0,0),
+        legend.position = "none")
+
+## NonClonal and SBS22a attribution
+p100 <- ggplot(data = combined_all_clonal %>% dplyr::filter(Mutation == "NonClonal"), aes(x = type, y = value)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.5, aes(fill = type)) +
+  geom_jitter(width = 0.15, size = 0.5, color = "black", shape = 21) +
+  scale_y_continuous(limits = c(-0.05, 1.05),
+                     breaks = seq(0, 1, by = 0.25)) +
+  ylab("SBS22a Attribution") + ggtitle("NonClonal") +
+  scale_fill_manual(values = color_anno) +
+  theme_bw() +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text = element_text(size = 6),
+        plot.title = element_text(size = 8, hjust = 0.5, margin = margin(b=0)),
+        panel.grid = element_blank(),
+        plot.margin = margin(0,5,0,0),
+        legend.position = "none")
+
+## Correlation analysis
+
+## Nonclonal
+combined_all_clonal$type_num <- as.numeric(combined_all_clonal$type)
+
+df <- combined_all_clonal %>% dplyr::filter(Mutation == "NonClonal")
+
+cor.test(
+  df$type_num,
+  df$value,
+  method = "spearman"
+)
+
+## rho -0.1501002 p-value = 0.5522
+
+## Clonal
+df <- combined_all_clonal %>% dplyr::filter(Mutation == "Clonal")
+
+cor.test(
+  df$type_num,
+  df$value,
+  method = "spearman"
+)
+
+# rho -0.8036692 p-value = 5.872e-05
+```
+
+Panel A (right) comparing Clonal vs Nonclonal for aging attribution (SBS1 and SBS5)
+```{r}
+## Same coding like the previous chunk
+ds_nonclonal <- assignment_res_nonclonal %>% mutate(NonClonal = SBS1 + SBS5) %>%
+  dplyr::select(Samples, NonClonal)
+
+ds_clonal <- assignment_res_clonal %>% mutate(Clonal = SBS1 + SBS5) %>%
+  dplyr::select(Samples, Clonal)
+
+combined_all_clonal <- ds_nonclonal %>% left_join(x = ., y = ds_clonal, by = "Samples") %>%
+  dplyr::filter(NonClonal > 0) %>%
+  dplyr::select(Samples, Clonal, NonClonal) %>%
+  gather(data = ., key = "Mutation", value = "value", -Samples) %>%
+  mutate(type = case_when(grepl(pattern = "N", x = Samples) ~ "N",
+                          grepl(pattern = "T", x = Samples) ~ "T",
+                          grepl(pattern = "Blood", x = Samples) ~ "B",
+                          grepl(pattern = "Urine", x = Samples) ~ "U"),
+         group = paste0("UC", as.numeric(str_extract(Samples, "\\d+"))))
+
+combined_all_clonal$Mutation <- factor(x = combined_all_clonal$Mutation, levels = c("NonClonal", "Clonal"))
+combined_all_clonal$type <- factor(x = combined_all_clonal$type, levels = c("T", "N","B", "U"))
+
+p11 <- ggplot(data = combined_all_clonal %>% dplyr::filter(Mutation == "Clonal"), aes(x = type, y = value)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.5, aes(fill = type)) +
+  geom_jitter(width = 0.15, size = 0.5, color = "black", shape = 21) +
+  scale_y_continuous(limits = c(-0.05, 1.05),
+                     breaks = seq(0, 1, by = 0.25)) +
+  ylab("Aging Attribution") + ggtitle("Clonal") +
+  scale_fill_manual(values = color_anno) +
+  theme_bw() +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text = element_text(size = 6),
+        plot.title = element_text(size = 8, hjust = 0.5, margin = margin(b=0)),
+        panel.grid = element_blank(),
+        plot.margin = margin(0,5,0,0),
+        legend.position = "none")
+
+p110 <- ggplot(data = combined_all_clonal %>% dplyr::filter(Mutation == "NonClonal"), aes(x = type, y = value)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.5, aes(fill = type)) +
+  geom_jitter(width = 0.15, size = 0.5, color = "black", shape = 21) +
+  scale_y_continuous(limits = c(-0.05, 1.05),
+                     breaks = seq(0, 1, by = 0.25)) +
+  ylab("Aging Attribution") + ggtitle("NonClonal") +
+  scale_fill_manual(values = color_anno) +
+  theme_bw() +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text = element_text(size = 6),
+        plot.title = element_text(size = 8, hjust = 0.5, margin = margin(b=0)),
+        panel.grid = element_blank(),
+        plot.margin = margin(0,5,0,0),
+        legend.position = "none")
+
+## Combine all figures together into a panel
+combined_plot_boxplot <- (p100 + p10 + p110 + p11) +
+  plot_layout(widths = c(1,1,1,1))
+
+## Correlation analysis with aging
+combined_all_clonal$type_num <- as.numeric(combined_all_clonal$type)
+
+## Nonclonal
+df <- combined_all_clonal %>% dplyr::filter(Mutation == "NonClonal")
+
+cor.test(
+  df$type_num,
+  df$value,
+  method = "spearman"
+)
+
+## rho 0.3053072 p-value = 0.1378
+
+## Clonal
+df <- combined_all_clonal %>% dplyr::filter(Mutation == "Clonal")
+
+cor.test(
+  df$type_num,
+  df$value,
+  method = "spearman"
+)
+
+# rho 0.3627764 p-value = 0.0747
+```
+
+
+Panel B - Comparing SBS attribution nonclonal vs clonal
+```{r}
+assignment_res_clonal_long <- assignment_res_clonal %>% gather(data = ., key = "signatures", value = "value", -Samples) %>%
+  mutate(method = "C")
+assignment_res_nonclonal_long <- assignment_res_nonclonal %>% gather(data = ., key = "signatures", value = "value", -Samples) %>%
+  mutate(method = "NC")
+
+combined_res <- rbind(assignment_res_nonclonal_long, assignment_res_clonal_long) %>% #, assignment_res_nonclonal
+  mutate(group = paste0("UC", as.numeric(str_extract(Samples, "\\d+"))))
+
+sample.order <- c("UC2", "UC4", "UC5", "UC7", "UC10", "UC11", "UC13", "UC14", "UC18", "UC19", "UC26", "UC34")
+
+## Factor level
+combined_res$group <- factor(x = combined_res$group, levels = sample.order)
+combined_res$method <- factor(x = combined_res$method, levels = c("NC", "C"))
+combined_res$signatures <- factor(x = combined_res$signatures, 
+                                levels = c("SBS1",  "SBS5", "SBS22a", "SBS31", "SBS39", "SBS40a", "SBS100"))
+
+sbs.color2 <- c("#5A5A5A", "#9E9E9E", "#A020F0", "#E6AB02", "#7A7A7A", "#1B9E77", "#C26D3D")
+names(sbs.color2) <- c("SBS1", "SBS5", "SBS22a", "SBS100", "SBS40a", "SBS39", "SBS31")
+
+df1 <- combined_res %>% dplyr::filter(group == "UC2")
+df1$Samples <- factor(x = df1$Samples, levels = c("UC2T", "UC2N"), labels = c("Tumor", "Normal"))
+
+p2 <-ggplot(data = df1, aes(x = method, y = value, fill = signatures)) + 
+  geom_bar(position = "stack", stat = "identity", width = 0.8) +
+  scale_fill_manual(values = sbs.color2) +
+  ylab("Proportion") + ggtitle("UC2") +
+  facet_grid2(. ~ Samples, scales = "free", space = "free",
+              strip = strip_themed(
+              text_x = list(
+                element_text(color = "black", face = "bold", size = 6, margin = margin(0, 0, 0, 0))
+              ))) +
+  theme_bw() +
+  guides(fill = guide_legend(nrow = 1)) +
+  theme(axis.text.x = element_text(size = 6),
+        axis.text.y = element_text(size = 6),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.title.x = element_blank(),
+        plot.title = element_text(size = 6, face = "bold", hjust = 0.5, margin = margin(b = 0)),
+        strip.text = element_text(size = 5),
+        panel.spacing = unit(0, "lines"),
+        panel.border = element_blank(),
+        panel.background = element_rect(fill = "white"),
+        strip.background = element_blank(),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        axis.line.y = element_line(color = "black", linewidth = 0.3),
+        axis.line.x = element_blank(),
+        # legend.position = c(0.9, -0.25),
+        plot.margin = margin(0,0,0,0),
+        legend.position = "none")
+
+p2
+
+df1 <- combined_res %>% dplyr::filter(group == "UC4")
+df1$Samples <- factor(x = df1$Samples, levels = c("UC4T", "UC4N"), label = c("Tumor", "Normal"))
+
+p3 <-ggplot(data = df1, aes(x = method, y = value, fill = signatures)) + 
+  geom_bar(position = "stack", stat = "identity", width = 0.8) +
+  scale_fill_manual(values = sbs.color2) +
+  ylab("Proportion") + ggtitle("UC4") +
+  facet_grid2(. ~ Samples, scales = "free", space = "free",
+              strip = strip_themed(
+              text_x = list(
+                element_text(color = "black", face = "bold", size = 6, margin = margin(0, 0, 0, 0))
+              ))) +
+  theme_bw() +
+  guides(fill = guide_legend(nrow = 1)) +
+  theme(axis.text.x = element_text(size = 6),
+        axis.text.y = element_text(size = 6),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.title.x = element_blank(),
+        plot.title = element_text(size = 6, face = "bold", hjust = 0.5, margin = margin(b = 0)),
+        strip.text = element_text(size = 5),
+        panel.spacing = unit(0, "lines"),
+        panel.border = element_blank(),
+        panel.background = element_rect(fill = "white"),
+        strip.background = element_blank(),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        axis.line.y = element_line(color = "black", linewidth = 0.3),
+        axis.line.x = element_blank(),
+        plot.margin = margin(0,0,0,0),
+        # legend.position = c(0.9, -0.25),
+        legend.position = "none")
+
+df1 <- combined_res %>% dplyr::filter(group == "UC5")
+df1$Samples <- factor(x = df1$Samples, levels = c("UC5T", "UC5N"), label = c("Tumor", "Normal"))
+
+p4 <-ggplot(data = df1, aes(x = method, y = value, fill = signatures)) + 
+  geom_bar(position = "stack", stat = "identity", width = 0.8) +
+  scale_fill_manual(values = sbs.color2) +
+  ylab("Proportion") + ggtitle("UC5") +
+  facet_grid2(. ~ Samples, scales = "free", space = "free",
+              strip = strip_themed(
+              text_x = list(
+                element_text(color = "black", face = "bold", size = 6, margin = margin(0, 0, 0, 0))
+              ))) +
+  theme_bw() +
+  guides(fill = guide_legend(nrow = 1)) +
+  theme(axis.text.x = element_text(size = 6),
+        axis.text.y = element_text(size = 6),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.title.x = element_blank(),
+        plot.title = element_text(size = 6, face = "bold", hjust = 0.5, margin = margin(b = 0)),
+        strip.text = element_text(size = 5),
+        panel.spacing = unit(0, "lines"),
+        panel.border = element_blank(),
+        panel.background = element_rect(fill = "white"),
+        strip.background = element_blank(),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        axis.line.y = element_line(color = "black", linewidth = 0.3),
+        axis.line.x = element_blank(),
+        plot.margin = margin(0,0,0,0),
+        # legend.position = c(0.9, -0.25),
+        legend.position = "none")
+
+df1 <- combined_res %>% dplyr::filter(group == "UC7")
+df1$Samples <- factor(x = df1$Samples, levels = c("UC7T", "UC7N", "UC7_Blood"), label = c("Tumor", "Normal", "Blood"))
+
+t7 <- binom.test(x = assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC7T"), "SBS22a"],
+                 n = sum(assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC7T"),]),
+                 p = assignment_res_nonclonal_long %>% dplyr::filter(Samples == "UC7T",
+                                                      signatures == "SBS22a") %>% pull(value) %>% as.numeric())
+
+n7 <- binom.test(x = assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC7N"), "SBS22a"],
+                 n = sum(assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC7N"),]),
+                 p = assignment_res_nonclonal_long %>% dplyr::filter(Samples == "UC7N",
+                                                      signatures == "SBS22a") %>% pull(value) %>% as.numeric())
+
+b7 <- binom.test(x = assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC7_Blood"), "SBS22a"],
+                 n = sum(assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC7_Blood"),]),
+                 p = assignment_res_nonclonal_long %>% dplyr::filter(Samples == "UC7_Blood",
+                                                      signatures == "SBS22a") %>% pull(value) %>% as.numeric())
+
+p5 <-ggplot(data = df1, aes(x = method, y = value, fill = signatures)) + 
+  geom_bar(position = "stack", stat = "identity", width = 0.8) +
+  scale_fill_manual(values = sbs.color2) +
+  ylab("Proportion") + ggtitle("UC7") +
+  facet_grid2(. ~ Samples, scales = "free", space = "free",
+              strip = strip_themed(
+              text_x = list(
+                element_text(color = "black", face = "bold", size = 6, margin = margin(0, 0, 0, 0))
+              ))) +
+  theme_bw() +
+  guides(fill = guide_legend(nrow = 1)) +
+  theme(axis.text.x = element_text(size = 6),
+        axis.text.y = element_text(size = 6),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.title.x = element_text(size = 6),
+        plot.title = element_text(size = 6, face = "bold", hjust = 0.5, margin = margin(b = 0)),
+        strip.text = element_text(size = 5),
+        panel.spacing = unit(0, "lines"),
+        panel.border = element_blank(),
+        panel.background = element_rect(fill = "white"),
+        strip.background = element_blank(),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        axis.line.y = element_line(color = "black", linewidth = 0.3),
+        axis.line.x = element_blank(),
+        plot.margin = margin(0,0,0,0),
+        # legend.position = c(0.9, -0.25),
+        legend.position = "none") +
+  xlab("p < 2.2e-16     p = 4.44e-11      p = 0.55")
+
+p5 
+
+df1 <- combined_res %>% dplyr::filter(group == "UC10")
+df1$Samples <- factor(x = df1$Samples, levels = c("UC10T", "UC10N"), labels = c("Tumor", "Normal"))
+
+p6 <-ggplot(data = df1, aes(x = method, y = value, fill = signatures)) + 
+  geom_bar(position = "stack", stat = "identity", width = 0.8) +
+  scale_fill_manual(values = sbs.color2) +
+  ylab("Proportion") + ggtitle("UC10") +
+  facet_grid2(. ~ Samples, scales = "free", space = "free",
+              strip = strip_themed(
+              text_x = list(
+                element_text(color = "black", face = "bold", size = 6, margin = margin(0, 0, 0, 0))
+              ))) +
+  theme_bw() +
+  guides(fill = guide_legend(nrow = 1)) +
+  theme(axis.text.x = element_text(size = 6),
+        axis.text.y = element_text(size = 6),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.title.x = element_blank(),
+        plot.title = element_text(size = 6, face = "bold", hjust = 0.5, margin = margin(b = 0)),
+        strip.text = element_text(size = 5),
+        panel.spacing = unit(0, "lines"),
+        panel.border = element_blank(),
+        panel.background = element_rect(fill = "white"),
+        strip.background = element_blank(),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        axis.line.y = element_line(color = "black", linewidth = 0.3),
+        axis.line.x = element_blank(),
+        plot.margin = margin(0,0,0,0),
+        # legend.position = c(0.9, -0.25),
+        legend.position = "none")
+
+df1 <- combined_res %>% dplyr::filter(group == "UC11")
+df1$Samples <- factor(x = df1$Samples, levels = c("UC11T", "UC11N"), labels = c("Tumor", "Normal"))
+
+p7 <-ggplot(data = df1, aes(x = method, y = value, fill = signatures)) + 
+  geom_bar(position = "stack", stat = "identity", width = 0.8) +
+  scale_fill_manual(values = sbs.color2) +
+  ylab("Proportion") + ggtitle("UC11") +
+  facet_grid2(. ~ Samples, scales = "free", space = "free",
+              strip = strip_themed(
+              text_x = list(
+                element_text(color = "black", face = "bold", size = 6, margin = margin(0, 0, 0, 0))
+              ))) +
+  theme_bw() +
+  guides(fill = guide_legend(nrow = 1)) +
+  theme(axis.text.x = element_text(size = 6),
+        axis.text.y = element_text(size = 6),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.title.x = element_text(size = 6),
+        plot.title = element_text(size = 6, face = "bold", hjust = 0.5, margin = margin(b = 0)),
+        strip.text = element_text(size = 5),
+        panel.spacing = unit(0, "lines"),
+        panel.border = element_blank(),
+        panel.background = element_rect(fill = "white"),
+        strip.background = element_blank(),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        axis.line.y = element_line(color = "black", linewidth = 0.3),
+        axis.line.x = element_blank(),
+        plot.margin = margin(0,0,0,0),
+        # legend.position = c(0.9, -0.25),
+        legend.position = "none") +
+  xlab("                        p = 0.65")
+
+n11 <- binom.test(x = assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC11N"), "SBS22a"],
+                 n = sum(assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC11N"),]),
+                 p = assignment_res_nonclonal_long %>% dplyr::filter(Samples == "UC11N",
+                                                      signatures == "SBS22a") %>% pull(value) %>% as.numeric())
+
+df1 <- combined_res %>% dplyr::filter(group == "UC13")
+df1$Samples <- factor(x = df1$Samples, levels = c("UC13T", "UC13N"), label = c("Tumor", "Normal"))
+
+p8 <-ggplot(data = df1, aes(x = method, y = value, fill = signatures)) + 
+  geom_bar(position = "stack", stat = "identity", width = 0.8) +
+  scale_fill_manual(values = sbs.color2) +
+  ylab("Proportion") + ggtitle("UC13") +
+  facet_grid2(. ~ Samples, scales = "free", space = "free",
+              strip = strip_themed(
+              text_x = list(
+                element_text(color = "black", face = "bold", size = 6, margin = margin(0, 0, 0, 0))
+              ))) +
+  theme_bw() +
+  guides(fill = guide_legend(nrow = 1)) +
+  theme(axis.text.x = element_text(size = 6),
+        axis.text.y = element_text(size = 6),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.title.x = element_text(size = 6),
+        plot.title = element_text(size = 6, face = "bold", hjust = 0.5, margin = margin(b = 0)),
+        strip.text = element_text(size = 5),
+        panel.spacing = unit(0, "lines"),
+        panel.border = element_blank(),
+        panel.background = element_rect(fill = "white"),
+        strip.background = element_blank(),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        axis.line.y = element_line(color = "black", linewidth = 0.3),
+        axis.line.x = element_blank(),
+        plot.margin = margin(0,0,0,0),
+        # legend.position = c(0.9, -0.25),
+        legend.position = "none") +
+  xlab("p = 1.17e-9      p = 7.70e-7")
+
+t13 <- binom.test(x = assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC13T"), "SBS22a"],
+                 n = sum(assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC13T"),]),
+                 p = assignment_res_nonclonal_long %>% dplyr::filter(Samples == "UC13T",
+                                                      signatures == "SBS22a") %>% pull(value) %>% as.numeric())
+
+n13 <- binom.test(x = assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC13N"), "SBS22a"],
+                 n = sum(assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC13N"),]),
+                 p = assignment_res_nonclonal_long %>% dplyr::filter(Samples == "UC13N",
+                                                      signatures == "SBS22a") %>% pull(value) %>% as.numeric())
+
+df1 <- combined_res %>% dplyr::filter(group == "UC14")
+df1$Samples <- factor(x = df1$Samples, levels = c("UC14T", "UC14N", "UC14_Blood", "UC14_Urine"), 
+                      labels = c("Tumor", "Normal", "Blood", "Urine"))
+
+p9 <-ggplot(data = df1, aes(x = method, y = value, fill = signatures)) + 
+  geom_bar(position = "stack", stat = "identity", width = 0.8) +
+  scale_fill_manual(values = sbs.color2) +
+  ylab("Proportion") + ggtitle("UC14") +
+  facet_grid2(. ~ Samples, scales = "free", space = "free",
+              strip = strip_themed(
+              text_x = list(
+                element_text(color = "black", face = "bold", size = 6, margin = margin(0, 0, 0, 0))
+              ))) +
+  theme_bw() +
+  guides(fill = guide_legend(nrow = 1)) +
+  theme(axis.text.x = element_text(size = 6),
+        axis.text.y = element_text(size = 6),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.title.x = element_text(size = 6),
+        plot.title = element_text(size = 6, face = "bold", hjust = 0.5, margin = margin(b = 0)),
+        strip.text = element_text(size = 5),
+        panel.spacing = unit(0, "lines"),
+        panel.border = element_blank(),
+        panel.background = element_rect(fill = "white"),
+        strip.background = element_blank(),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        axis.line.y = element_line(color = "black", linewidth = 0.3),
+        axis.line.x = element_blank(),
+        plot.margin = margin(0,0,0,0),
+        # legend.position = c(0.9, -0.25),
+        legend.position = "none") +
+  xlab("p < 2.2e-16       p = 0.0003        p = 0.17        p = 1      ")
+
+t14 <- binom.test(x = assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC14T"), "SBS22a"],
+                 n = sum(assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC14T"),]),
+                 p = assignment_res_nonclonal_long %>% dplyr::filter(Samples == "UC14T",
+                                                      signatures == "SBS22a") %>% pull(value) %>% as.numeric())
+
+n14 <- binom.test(x = assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC14N"), "SBS22a"],
+                 n = sum(assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC14N"),]),
+                 p = assignment_res_nonclonal_long %>% dplyr::filter(Samples == "UC14N",
+                                                      signatures == "SBS22a") %>% pull(value) %>% as.numeric())
+
+b14 <- binom.test(x = assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC14_Blood"), "SBS22a"],
+                 n = sum(assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC14_Blood"),]),
+                 p = assignment_res_nonclonal_long %>% dplyr::filter(Samples == "UC14_Blood",
+                                                      signatures == "SBS22a") %>% pull(value) %>% as.numeric())
+
+u14 <- binom.test(x = assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC14_Urine"), "SBS22a"],
+                 n = sum(assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC14_Urine"),]),
+                 p = assignment_res_nonclonal_long %>% dplyr::filter(Samples == "UC14_Urine",
+                                                      signatures == "SBS22a") %>% pull(value) %>% as.numeric())
+
+df1 <- combined_res %>% dplyr::filter(group == "UC18")
+df1$Samples <- factor(x = df1$Samples, levels = c("UC18T", "UC18N", "UC18_Blood", "UC18_Urine"), 
+                      labels = c("Tumor", "Normal", "Blood", "Urine"))
+
+p10 <-ggplot(data = df1, aes(x = method, y = value, fill = signatures)) + 
+  geom_bar(position = "stack", stat = "identity", width = 0.8) +
+  scale_fill_manual(values = sbs.color2) +
+  ylab("Proportion") + ggtitle("UC18") +
+  facet_grid2(. ~ Samples, scales = "free", space = "free",
+              strip = strip_themed(
+              text_x = list(
+                element_text(color = "black", face = "bold", size = 6, margin = margin(0, 0, 0, 0))
+              ))) +
+  theme_bw() +
+  guides(fill = guide_legend(nrow = 1)) +
+  theme(axis.text.x = element_text(size = 6),
+        axis.text.y = element_text(size = 6),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.title.x = element_text(size = 6),
+        plot.title = element_text(size = 6, face = "bold", hjust = 0.5, margin = margin(b = 0)),
+        strip.text = element_text(size = 5),
+        panel.spacing = unit(0, "lines"),
+        panel.border = element_blank(),
+        panel.background = element_rect(fill = "white"),
+        strip.background = element_blank(),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        axis.line.y = element_line(color = "black", linewidth = 0.3),
+        axis.line.x = element_blank(),
+        plot.margin = margin(0,0,0,0),
+        # legend.position = c(0.9, -0.25),
+        legend.position = "none") +
+  xlab("p < 2.2e-16       p = 0.027        p = 0.003          p = 0.63  ")
+
+t18 <- binom.test(x = assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC18T"), "SBS22a"],
+                 n = sum(assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC18T"),]),
+                 p = assignment_res_nonclonal_long %>% dplyr::filter(Samples == "UC18T",
+                                                      signatures == "SBS22a") %>% pull(value) %>% as.numeric())
+
+n18 <- binom.test(x = assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC18N"), "SBS22a"],
+                 n = sum(assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC18N"),]),
+                 p = assignment_res_nonclonal_long %>% dplyr::filter(Samples == "UC18N",
+                                                      signatures == "SBS22a") %>% pull(value) %>% as.numeric())
+
+b18 <- binom.test(x = assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC18_Blood"), "SBS22a"],
+                 n = sum(assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC18_Blood"),]),
+                 p = assignment_res_nonclonal_long %>% dplyr::filter(Samples == "UC18_Blood",
+                                                      signatures == "SBS22a") %>% pull(value) %>% as.numeric())
+
+u18 <- binom.test(x = assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC18_Urine"), "SBS22a"],
+                 n = sum(assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC18_Urine"),]),
+                 p = assignment_res_nonclonal_long %>% dplyr::filter(Samples == "UC18_Urine",
+                                                      signatures == "SBS22a") %>% pull(value) %>% as.numeric())
+
+df1 <- combined_res %>% dplyr::filter(group == "UC19")
+df1$Samples <- factor(x = df1$Samples, levels = c("UC19T", "UC19N", "UC19_Blood", "UC19_Urine"),
+                      labels = c("Tumor", "Normal", "Blood", "Urine"))
+
+p11 <-ggplot(data = df1, aes(x = method, y = value, fill = signatures)) + 
+  geom_bar(position = "stack", stat = "identity", width = 0.8) +
+  scale_fill_manual(values = sbs.color2) +
+  ylab("Proportion") + ggtitle("UC19") +
+  facet_grid2(. ~ Samples, scales = "free", space = "free",
+              strip = strip_themed(
+              text_x = list(
+                element_text(color = "black", face = "bold", size = 6, margin = margin(0, 0, 0, 0))
+              ))) +
+  theme_bw() +
+  guides(fill = guide_legend(nrow = 1)) +
+  theme(axis.text.x = element_text(size = 6),
+        axis.text.y = element_text(size = 6),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.title.x = element_text(size = 6),
+        plot.title = element_text(size = 6, face = "bold", hjust = 0.5, margin = margin(b=0)),
+        strip.text = element_text(size = 5),
+        panel.spacing = unit(0, "lines"),
+        panel.border = element_blank(),
+        panel.background = element_rect(fill = "white"),
+        strip.background = element_blank(),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        axis.line.y = element_line(color = "black", linewidth = 0.3),
+        axis.line.x = element_blank(),
+        plot.margin = margin(0,0,0,0),
+        # legend.position = c(0.9, -0.25),
+        legend.position = "none") +
+  xlab("p = 4.85e-8       p = 0.014         p = 0.33          p = 0.014  ")
+
+t19 <- binom.test(x = assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC19T"), "SBS22a"],
+                 n = sum(assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC19T"),]),
+                 p = assignment_res_nonclonal_long %>% dplyr::filter(Samples == "UC19T",
+                                                      signatures == "SBS22a") %>% pull(value) %>% as.numeric())
+
+n19 <- binom.test(x = assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC19N"), "SBS22a"],
+                 n = sum(assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC19N"),]),
+                 p = assignment_res_nonclonal_long %>% dplyr::filter(Samples == "UC19N",
+                                                      signatures == "SBS22a") %>% pull(value) %>% as.numeric())
+
+b19 <- binom.test(x = assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC19_Blood"), "SBS22a"],
+                 n = sum(assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC19_Blood"),]),
+                 p = assignment_res_nonclonal_long %>% dplyr::filter(Samples == "UC19_Blood",
+                                                      signatures == "SBS22a") %>% pull(value) %>% as.numeric())
+
+u19 <- binom.test(x = assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC19_Urine"), "SBS22a"],
+                 n = sum(assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC19_Urine"),]),
+                 p = assignment_res_nonclonal_long %>% dplyr::filter(Samples == "UC19_Urine",
+                                                      signatures == "SBS22a") %>% pull(value) %>% as.numeric())
+
+df1 <- combined_res %>% dplyr::filter(group == "UC26")
+df1$Samples <- factor(x = df1$Samples, levels = c("UC26T", "UC26N"), labels = c("Tumor", "Normal"))
+
+p12 <-ggplot(data = df1, aes(x = method, y = value, fill = signatures)) + 
+  geom_bar(position = "stack", stat = "identity", width = 0.8) +
+  scale_fill_manual(values = sbs.color2) +
+  ylab("Proportion") + ggtitle("UC26") +
+  facet_grid2(. ~ Samples, scales = "free", space = "free",
+              strip = strip_themed(
+              text_x = list(
+                element_text(color = "black", face = "bold", size = 6, margin = margin(0, 0, 0, 0))
+              ))) +
+  theme_bw() +
+  guides(fill = guide_legend(nrow = 1)) +
+  theme(axis.text.x = element_text(size = 6),
+        axis.text.y = element_text(size = 6),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.title.x = element_blank(),
+        plot.title = element_text(size = 6, face = "bold", hjust = 0.5, margin = margin(b = 0)),
+        strip.text = element_text(size = 5),
+        panel.spacing = unit(0, "lines"),
+        panel.border = element_blank(),
+        panel.background = element_rect(fill = "white"),
+        strip.background = element_blank(),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        axis.line.y = element_line(color = "black", linewidth = 0.3),
+        axis.line.x = element_blank(),
+        plot.margin = margin(0,0,0,0),
+        # legend.position = c(0.9, -0.25),
+        legend.position = "none")
+
+df1 <- combined_res %>% dplyr::filter(group == "UC34")
+df1$Samples <- factor(x = df1$Samples, levels = c("UC34T", "UC34N", "UC34_Blood"), label = c("Tumor", "Normal", "Blood"))
+
+p13 <-ggplot(data = df1, aes(x = method, y = value, fill = signatures)) + 
+  geom_bar(position = "stack", stat = "identity", width = 0.8) +
+  scale_fill_manual(values = sbs.color2) +
+  ylab("Proportion") + ggtitle("UC34") +
+  facet_grid2(. ~ Samples, scales = "free", space = "free",
+              strip = strip_themed(
+              text_x = list(
+                element_text(color = "black", face = "bold", size = 6, margin = margin(0,0,0,0))
+              ))) +
+  theme_bw() +
+  guides(fill = guide_legend(nrow = 1)) +
+  theme(axis.text.x = element_text(size = 6),
+        axis.text.y = element_text(size = 6),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.title.x = element_text(size = 6),
+        plot.title = element_text(size = 6, face = "bold", hjust = 0.5, margin = margin(b=0)),
+        strip.text = element_text(size = 5),
+        panel.spacing = unit(0, "lines"),
+        panel.border = element_blank(),
+        panel.background = element_rect(fill = "white"),
+        strip.background = element_blank(),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        axis.line.y = element_line(color = "black", linewidth = 0.3),
+        axis.line.x = element_blank(),
+        plot.margin = margin(0,0,0,0),
+        # legend.position = c(0.9, -0.25),
+        legend.position = "none") +
+  xlab("p < 2.2e-16          p = 1           p = 0.041")
+
+t34 <- binom.test(x = assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC34T"), "SBS22a"],
+                 n = sum(assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC34T"),]),
+                 p = assignment_res_nonclonal_long %>% dplyr::filter(Samples == "UC34T",
+                                                      signatures == "SBS22a") %>% pull(value) %>% as.numeric())
+
+n34 <- binom.test(x = assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC34N"), "SBS22a"],
+                 n = sum(assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC34N"),]),
+                 p = assignment_res_nonclonal_long %>% dplyr::filter(Samples == "UC34N",
+                                                      signatures == "SBS22a") %>% pull(value) %>% as.numeric())
+
+b34 <- binom.test(x = assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC34_Blood"), "SBS22a"],
+                 n = sum(assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC34_Blood"),]),
+                 p = assignment_res_nonclonal_long %>% dplyr::filter(Samples == "UC34_Blood",
+                                                      signatures == "SBS22a") %>% pull(value) %>% as.numeric())
+
+## get legend
+
+df1 <- combined_res %>% dplyr::filter(group == "UC14")
+df1$Samples <- factor(x = df1$Samples, levels = c("UC14T", "UC14N", "UC14_Blood", "UC14_Urine"))
+
+p9_legend <-ggplot(data = df1, aes(x = method, y = value, fill = signatures)) + 
+  geom_bar(position = "stack", stat = "identity", width = 0.8) +
+  scale_fill_manual(values = sbs.color2) +
+  ylab("Proportion") +
+  facet_grid2(. ~ Samples, scales = "free", space = "free",
+              strip = strip_themed(
+              text_x = list(
+                element_text(color = "black", face = "bold", size = 6, margin = margin(0, 0, 0, 0))
+              ))) +
+  theme_bw() +
+  guides(fill = guide_legend(nrow = 1)) +
+  theme(axis.text.x = element_text(size = 6),
+        axis.text.y = element_text(size = 6),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.title.x = element_text(size = 6),
+        strip.text = element_text(size = 5),
+        panel.spacing = unit(0, "lines"),
+        panel.border = element_blank(),
+        panel.background = element_rect(fill = "white"),
+        strip.background = element_blank(),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        axis.line.y = element_line(color = "black", linewidth = 0.3),
+        axis.line.x = element_blank(),
+        plot.margin = margin(0,0,0,0),
+        legend.position = "bottom",
+        legend.direction = "horizontal",
+        legend.title = element_blank(),
+        legend.text = element_text(size = 5),
+        legend.key.size = unit(0.3, "cm"),
+        ) 
+
+library(cowplot)
+p9_legend <- get_legend(p9_legend)
+
+legend_row1 <- plot_grid(
+  p9_legend) + theme(plot.margin = margin(5, 0, 0, 0))
+```
+
+plot
+```{r}
+combined_plot2 <- (p2 + plot_spacer() + p3 + plot_spacer() + p4) +
+  plot_layout(widths = c(0.55, 0.25, 0.55, 0.25, 0.55))
+combined_plot3 <- (p5 + plot_spacer() + p6 + plot_spacer() + p7) +
+  plot_layout(widths = c(0.85, 0.1, 0.55, 0.1, 0.55))
+combined_plot4 <- (plot_spacer() + p8 + plot_spacer() + p9 + plot_spacer()) +
+  plot_layout(widths = c(0.2, 0.55, 0.2, 1.05, 0.2))
+combined_plot5 <- (p10 + plot_spacer() + p11) +
+  plot_layout(widths = c(1.025, 0.1, 1.025))
+combined_plot6 <- (plot_spacer() + p12 + plot_spacer() + p13 + plot_spacer()) +
+  plot_layout(widths = c(0.25, 0.55, 0.25, 0.85, 0.25))
+
+
+layout <- "
+AAAAAAAA
+AAAAAAAA
+BBBBBBBB
+BBBBBBBB
+BBBBBBBB
+BBBBBBBB
+BBBBBBBB
+BBBBBBBB
+BBBBBBBB
+BBBBBBBB"
+
+combined_plot <-
+  combined_plot2 /
+  combined_plot3 /
+  combined_plot4 /
+  combined_plot5 /
+  combined_plot6 /
+  legend_row1 +
+  plot_layout(
+    heights = c(1, 1, 1, 1, 1, 0.1)
+  )
+
+set.seed(602)
+combined_plot1 <- free(wrap_elements(combined_plot_boxplot)) + wrap_elements(combined_plot) + plot_layout(design=layout) + 
+  plot_annotation(tag_levels = list(c("A", "B", ""))) &
+  theme(plot.tag = element_text(face = 'bold', size = 10, margin = margin(-8, 0,-8,-8)),
+        text = element_text(family = "Arial"))
+
+ggsave("/mnt/data1/peter/repo/AAmanu/figure/figure5.png", 
+       width = 170, height = 170,
+       units = "mm", dpi = 600)
+```
+
