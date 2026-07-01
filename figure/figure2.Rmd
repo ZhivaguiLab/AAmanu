@@ -1,0 +1,1336 @@
+---
+title: "figure2"
+output: html_document
+date: "2026-06-23"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(tidyverse)
+library(patchwork)
+library(ggh4x)
+library(mSigAct)
+library(ggradar)
+library(ggtext)
+```
+
+SBS96 denovo signature extraction using WGS data
+```{r}
+## Load mutational catalogue
+load("/mnt/data1/peter/repo/AAmanu/data/AA_UTUC_data_Catalogs_Mutect.RData")
+mutcat <- catSBS$catSBS96 %>% as.data.frame() %>% 
+  rownames_to_column(var = "MutationType") %>%
+  mutate(MutationType = paste0(substring(MutationType,1,1), "[",
+                               substring(MutationType,2,2), ">",
+                               substring(MutationType,4,4), "]",
+                               substring(MutationType,3,3)))
+## Save as txt file for SPE
+write.table(mutcat, file = "/mnt/data1/peter/repo/AAmanu/data/spp_wgs_uc.txt",
+            row.names = F, quote = F, sep = "\t")
+
+# Run spe.
+# python /mnt/data1/peter/repo/AAmanu/code/spe/spe_wgs_uc.py
+```
+
+Signature assignment using SPE denovo decomposition results
+```{r}
+# load reference signatures (COSMIC v3.5)
+ref.sigs <- ICAMS::ReadCatalog("/mnt/storage/peter/steve_aa/manu/updated_051126/data/spe/wgs_uc/SBS96/Suggested_Solution/COSMIC_SBS96_Decomposed_Solution/Signatures/COSMIC_SBS96_Signatures.txt")
+ref.sigs <- ICAMS::as.catalog(ref.sigs,
+                              ref.genome = "GRCh38",
+                              region = "genome",
+                              catalog.type = "counts.signature")
+
+prior.sigs <- colnames(ref.sigs)
+
+input_file <- "/mnt/data1/peter/repo/AAmanu/data/spp_wgs_uc.txt"
+input_catalog <- ICAMS::ReadCatalog(file = input_file)
+
+sparseAssign <- SparseAssignActivity(spectra = input_catalog,
+                                     sigs = ref.sigs[,prior.sigs],
+                                     max.level = length(prior.sigs)-1,
+                                     p.thresh = 0.05/length(prior.sigs),
+                                     num.parallel.samples = 5,
+                                     mc.cores.per.sample = 20,
+                                     drop.low.mut.samples = FALSE,
+                                     seed = 425,
+                                     output.dir = "/mnt/storage/peter/repo/manuAA/data/mSigAct/wgs_uc_cosmic/")
+# save(sparseAssign, file = "/mnt/storage/peter/repo/manuAA/data/mSigAct/wgs_uc_cosmic.rda")
+```
+
+Panel A SBS profile denovo
+```{r}
+## Function to plot SBS96
+getSBSorder <- function() {
+    counter <- 1
+    df <- as.data.frame(matrix(data = NA, nrow = 96, ncol = 3))
+    all_bp <- c("A", "C", "G", "T")
+    pyr_muts <- c("C>A", "C>G", "C>T", "T>A", "T>C", "T>G")
+    for(m in pyr_muts){
+      for(a in all_bp){
+        for(b in all_bp){
+          df[counter,1] <- paste(a, "[",m, "]", b, sep="")
+          df[counter,2] <- m
+          df[counter,3] <- paste(a, substring(m,1,1),b, sep="")
+          counter <- counter + 1 ## Add counter for next row
+        }
+      }
+    }
+    return(df)
+  }
+
+sbs.df <- getSBSorder()
+
+mut.color <- c('deepskyblue','black','red','lightgrey','yellowgreen','pink')
+
+## Function to plot SBS96
+plotSBS <- function(df, x.label, y.label, alpha = 1, strip.color = "white", strip.size = 3.5) {
+  df.pd <- df %>% left_join(x = ., y = sbs.df, by = c("MutationType"="V1"))
+  df.pd$MutationType <- factor(x = df.pd$MutationType, levels = sbs.df$V1)
+
+  # anno <- df.pd %>% dplyr::filter(V2 == "T>G") %>%
+  #   mutate(x = Inf,
+  #          y = Inf,
+  #          label = paste0("Total: ", round(sum(df.pd$value), digits = 0))
+  #          )
+
+  p1 <- ggplot(data = df.pd, aes(x = MutationType, y = value/sum(value)*100)) +
+    geom_col(aes(fill = V2), alpha = alpha) +
+    theme_bw() +
+    guides(fill = "none") +
+    scale_fill_manual(values = mut.color) +
+    facet_wrap2(.~V2, nrow = 1, scale = "free_x", drop = TRUE,
+                strip = strip_themed(
+                background_x = list(
+                  element_rect(fill = mut.color[1], color = "transparent"),
+                  element_rect(fill = mut.color[2], color = "transparent"),
+                  element_rect(fill = mut.color[3], color = "transparent"),
+                  element_rect(fill = mut.color[4], color = "transparent"),
+                  element_rect(fill = mut.color[5], color = "transparent"),
+                  element_rect(fill = mut.color[6], color = "transparent")
+                  ),
+                text_x = list(
+                  element_text(color = strip.color, face = "bold", size = strip.size, margin = margin(1, 1, 1, 1))
+                  )
+                )) +
+    # geom_text(data = anno, aes(x = x, y = y, label = label), inherit.aes = FALSE, size = 2.4,
+    #           vjust = 1.1,
+    #           hjust = 1.1) +
+    scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
+    scale_x_discrete(labels = setNames(sbs.df$V3, sbs.df$V1)) +
+    coord_cartesian(clip = "off") +
+    ylab(y.label) + xlab(x.label) +
+    theme(panel.border = element_blank(),
+          strip.background = element_blank(),
+          panel.spacing = unit(0, "lines"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 3),
+          axis.ticks.x = element_blank(),
+          axis.text.y = element_text(size = 6),
+          axis.title.y = element_text(size = 8),
+          axis.title.x = element_text(size = 8))
+}
+
+## Function to plot SBS96
+plotSBSnostrip <- function(df, x.label, y.label, alpha = 1, strip.color = "white", strip.size = 3.5) {
+  df.pd <- df %>% left_join(x = ., y = sbs.df, by = c("MutationType"="V1"))
+  df.pd$MutationType <- factor(x = df.pd$MutationType, levels = sbs.df$V1)
+
+  # anno <- df.pd %>% dplyr::filter(V2 == "T>G") %>%
+  #   mutate(x = Inf,
+  #          y = Inf,
+  #          label = paste0("Total: ", round(sum(df.pd$value), digits = 0))
+  #          )
+
+  p1 <- ggplot(data = df.pd, aes(x = MutationType, y = value/sum(value)*100)) +
+    geom_col(aes(fill = V2), alpha = alpha) +
+    theme_bw() +
+    guides(fill = "none") +
+    scale_fill_manual(values = mut.color) +
+    facet_wrap2(.~V2, nrow = 1, scale = "free_x", drop = TRUE,
+                strip = strip_themed(
+                background_x = list(
+                  element_blank(), element_blank(), element_blank(), element_blank(), element_blank(), element_blank()
+                  ),
+                text_x = list(
+                  element_text(color = strip.color, face = "bold", size = strip.size, margin = margin(1, 1, 1, 1))
+                  )
+                )) +
+    # geom_text(data = anno, aes(x = x, y = y, label = label), inherit.aes = FALSE, size = 2.4,
+    #           vjust = 1.1,
+    #           hjust = 1.1) +
+    scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
+    scale_x_discrete(labels = setNames(sbs.df$V3, sbs.df$V1)) +
+    coord_cartesian(clip = "off") +
+    ylab(y.label) + xlab(x.label) +
+    theme(panel.border = element_blank(),
+          strip.background = element_blank(),
+          panel.spacing = unit(0, "lines"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 3),
+          axis.ticks.x = element_blank(),
+          axis.text.y = element_text(size = 6),
+          axis.title.y = element_text(size = 8),
+          axis.title.x = element_text(size = 8))
+}
+
+
+## Load SBS96 denovo signatures from SPE
+spe_denovo <- data.table::fread("/mnt/data1/peter/repo/AAmanu/data/spe/wgs_uc/SBS96/Suggested_Solution/SBS96_De-Novo_Solution/Signatures/SBS96_De-Novo_Signatures.txt") %>% as.data.frame()
+
+#################
+## SBSA denovo ##
+p2 <- plotSBS(df = data.frame(MutationType = spe_denovo$MutationType, value = spe_denovo$SBS96A), 
+              x.label = NULL, y.label = "SBSA", strip.size = 4) +
+  theme(plot.margin = margin(0, 0, 0, 0),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_text(size = 6),
+        axis.ticks.y = element_blank())
+
+#################
+## SBSB denovo ##
+p3 <- plotSBSnostrip(df = data.frame(MutationType = spe_denovo$MutationType, value = spe_denovo$SBS96B), 
+              x.label = NULL, y.label = "SBSB", strip.color = "transparent", strip.size = 0) +
+  theme(axis.ticks.y = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_text(size = 6),
+        axis.title.x = element_blank(),
+        plot.margin = margin(0, 0, 0, 0))
+
+#################
+## SBSC denovo ##
+p4 <- plotSBSnostrip(df = data.frame(MutationType = spe_denovo$MutationType, value = spe_denovo$SBS96C), 
+              x.label = NULL, y.label = "SBSC", strip.color = "transparent", strip.size = 0) +
+  theme(axis.ticks.y = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_text(size = 6),
+        axis.text.x = element_text(size = 2.2),
+        plot.margin = margin(0, 0, 0, 0))
+
+## Combine all plots together
+sbs_combined <- p2 / p3 / p4 +
+  plot_layout(heights = c(1, 0.80, 1))
+
+```
+
+Panel A DBS denovo profile
+```{r}
+dbs_denovo <- data.table::fread("/mnt/data1/peter/repo/AAmanu/data/spe/wgs_uc_dbs/DBS78/Suggested_Solution/DBS78_De-Novo_Solution/Signatures/DBS78_De-Novo_Signatures.txt") %>% as.data.frame()
+
+## Factor ordering for plotting
+dbs_denovo$V2 <- substring(text = dbs_denovo$MutationType, first = 4, last = 5)
+dbs_denovo$V3 <- paste0(substring(text = dbs_denovo$MutationType, first = 1, last = 3), "NN")
+dbs_denovo$V3 <- factor(dbs_denovo$V3, levels = unique(dbs_denovo$V3))
+dbs_denovo$MutationType <- factor(dbs_denovo$MutationType, levels = dbs_denovo$MutationType)
+## Col annotation based on SPP
+dbs.color <- c("#03BDEF", "#0366CC", "#A2CF63", "#016601", "#FF9999", "#E42926", "#FFB266", "#FF8001", "#CC99FF", "#4C0199")
+
+###################
+## DBS78A denovo ##
+p6 <- ggplot(data = dbs_denovo, aes(x = MutationType, y = DBS78A*100)) +
+  geom_col(aes(fill = V3), alpha = 1, width = 0.8) +
+  facet_grid2(. ~ V3, scales = "free", space = "free",
+              strip = strip_themed(background_x = list(
+        element_rect(fill = "#03BDEF", color = "transparent"),
+        element_rect(fill = "#0366CC", color = "transparent"),
+        element_rect(fill = "#A2CF63", color = "transparent"),
+        element_rect(fill = "#016601", color = "transparent"),
+        element_rect(fill = "#FF9999", color = "transparent"),
+        element_rect(fill = "#E42926", color = "transparent"),
+        element_rect(fill = "#FFB266", color = "transparent"),
+        element_rect(fill = "#FF8001", color = "transparent"),
+        element_rect(fill = "#CC99FF", color = "transparent"),
+        element_rect(fill = "#4C0199", color = "transparent")
+        ),
+        text_x = list(
+        element_text(color = "white", face = "bold", size = 2.4, margin = margin(1, 1, 1, 1))))
+        ) +
+  coord_cartesian(clip = "off") +
+  ylab("DBSA") +
+  scale_fill_manual(values = dbs.color) +
+  scale_x_discrete(labels = setNames(dbs_denovo$V2, dbs_denovo$MutationType)) +
+  theme(panel.spacing = unit(0, "lines"),
+        panel.border = element_blank(),
+        panel.background = element_rect(fill = "white"),
+        strip.background = element_blank(),
+        axis.text.y = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text.y.right = element_text(angle = -90),
+        axis.ticks.y.right = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 6),
+        plot.title = element_text(size = 6, family = "Arial", margin = margin(b = -0.25)),
+        panel.grid.major.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        legend.position = "none",
+        plot.margin = margin(0, 0, 0, 0))
+
+###################
+## DBS78B denovo ##
+p7 <- ggplot(data = dbs_denovo, aes(x = MutationType, y = DBS78B*100)) +
+  geom_col(aes(fill = V3), alpha = 1, width = 0.8) +
+  facet_grid2(. ~ V3, scales = "free", space = "free",
+              strip = strip_themed(background_x = list(
+        element_blank(),
+        element_blank(),
+        element_blank(),
+        element_blank(),
+        element_blank(),
+        element_blank(),
+        element_blank(),
+        element_blank(),
+        element_blank(),
+        element_blank()
+        ),
+        text_x = list(
+        element_text(color = "transparent", face = "bold", size = 0, margin = margin(1, 1, 1, 1))))
+        ) +
+  coord_cartesian(clip = "off") +
+  ylab("DBSB") +
+  xlab("DBSB") +
+  scale_fill_manual(values = dbs.color) +
+  scale_x_discrete(labels = setNames(dbs_denovo$V2, dbs_denovo$MutationType)) +
+  theme(panel.spacing = unit(0, "lines"),
+        panel.border = element_blank(),
+        panel.background = element_rect(fill = "white"),
+        strip.background = element_blank(),
+        axis.text.y = element_blank(),
+        axis.text.x = element_text(size = 3,  angle = 90, vjust = 0.5, hjust = 1),
+        axis.ticks = element_blank(),
+        axis.text.y.right = element_text(angle = -90),
+        axis.ticks.y.right = element_blank(),
+        axis.title.y = element_text(size = 6),
+        axis.title.x = element_blank(),
+        panel.grid.major.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        legend.position = "none",
+        plot.margin = margin(0, 0, 0, 0))
+
+## Combine all plots together
+dbs_combined <- p6 / p7 +
+  plot_layout(heights = c(1, 1))
+```
+
+Panel A ID denovo profile
+```{r}
+## Denovo sig
+spe_denovo <- data.table::fread("/mnt/data1/peter/repo/AAmanu/data/spe/wgs_uc_id//ID83/Suggested_Solution/ID83_De-Novo_Solution/Signatures/ID83_De-Novo_Signatures.txt") %>% as.data.frame()
+## Cosmic ID reference profile
+v35 <- data.table::fread("/home/nguyep22/COSMIC_v3.5_ID_GRCh37.txt")
+## Check context match
+table(v35$Type == spe_denovo$MutationType)
+
+## Col annotation based on SPP
+id.color <- c("#FDBE6F", "#FF8002", "#B0DD8B", "#36A12E", "#FDCAA5", "#FC8A6A", "#F14432", "#BC191A", 
+              "#D0E1F2", "#94C4DF", "#4A98C9", "#1764AB", "#E2E2EF", "#B6B6D8", "#8683BD", "#62409B")
+names(id.color) <- c("1:Del:C", "1:Del:T", "1:Ins:C", "1:Ins:T", "2:Del:R", "3:Del:R", "4:Del:R", "5:Del:R",
+                     "2:Ins:R", "3:Ins:R", "4:Ins:R", "5:Ins:R", "2:Del:M", "3:Del:M", "4:Del:M", "5:Del:M")
+
+## Create Indel Ordering based on SigProfilerPlotting
+id_order <- v35 %>% dplyr::rename("MutationType"="Type") %>% 
+  dplyr::select(MutationType) %>%
+  mutate(V2 = sub(":[^:]*$", "", .$MutationType)) %>%
+  mutate(V3 = as.numeric(sub(".*:", "", .$MutationType)))
+
+for(n in unique(id_order$V2)) {
+  nmut.label <- id_order %>% dplyr::filter(V2 == n)
+  if(grepl("Ins", n)) {
+    invisible()
+  } else {
+    if(any(nmut.label$V3 %in% 0)) {
+      rowid <- which(id_order$V2 == n)
+      for(row.num in rowid) {
+        id_order[row.num, "V3"] <- as.numeric(id_order[row.num, "V3"]) + 1
+        }
+      } else {
+        invisible()
+      }
+  }
+
+  nmut.value <- id_order %>% dplyr::filter(V2 == n) %>% pull(V3)
+  if(length(nmut.value) > 3) {
+    nmut.max <- id_order %>% dplyr::filter(V2 == n) %>% pull(V3) %>% max()
+    rowid <- which(id_order$V2 == n & id_order$V3 == nmut.max)
+    id_order[rowid, "V3_lab"] <- paste0(as.character(nmut.max), "⁺")
+  }
+}
+
+id_order <- id_order %>% mutate(V3_lab = ifelse(is.na(V3_lab), as.character(V3), V3_lab))
+
+################
+## IDA denovo ##
+pd <- data.frame(MutationType = spe_denovo$MutationType,
+                 value = spe_denovo$ID83A) %>%
+  left_join(x = ., y = id_order, by = "MutationType")
+
+## Add levels
+pd$MutationType <- factor(x = pd$MutationType, levels = id_order$MutationType)
+pd$V2 <- factor(x = pd$V2, levels = c("1:Del:C", "1:Del:T", "1:Ins:C", "1:Ins:T",
+                                      "2:Del:R", "3:Del:R", "4:Del:R", "5:Del:R",
+                                      "2:Ins:R", "3:Ins:R", "4:Ins:R", "5:Ins:R",
+                                      "2:Del:M", "3:Del:M", "4:Del:M", "5:Del:M"))
+## Custom labels for strip text
+custom_labels <- c("1:Del:C"="C", "1:Del:T"="T", "1:Ins:C"="C", "1:Ins:T"="T", "2:Del:R"="2", 
+                   "3:Del:R"="3", "4:Del:R"="4", "5:Del:R"="5⁺","2:Ins:R"="2", "3:Ins:R"="3",
+                   "4:Ins:R"="4", "5:Ins:R"="5⁺", "2:Del:M"="2", "3:Del:M"="3", "4:Del:M"="4",
+                   "5:Del:M"="5⁺")
+
+pd.max_val <- max(abs(pd$value))
+
+anno <- pd %>% dplyr::filter(V2 == "5:Del:M") %>%
+  mutate(x = Inf, y = Inf,
+         label = paste0("ID23 = ", round(lsa::cosine(spe_denovo$ID83A, v35$ID23), digits = 2)))
+
+p8 <- ggplot(data = pd, aes(x = MutationType, y = value*100)) +
+  geom_col(aes(fill = V2), alpha = 1, width = 0.8) +
+  scale_fill_manual(values = id.color) +
+  facet_grid2(. ~ V2, scales = "free", space = "free",
+              labeller = labeller(V2 = custom_labels),
+              strip = strip_themed(background_x = list(
+        element_rect(fill = "#FDBE6F", color = "transparent"),
+        element_rect(fill = "#FF8002", color = "transparent"),
+        element_rect(fill = "#B0DD8B", color = "transparent"),
+        element_rect(fill = "#36A12E", color = "transparent"),
+        element_rect(fill = "#FDCAA5", color = "transparent"),
+        element_rect(fill = "#FC8A6A", color = "transparent"),
+        element_rect(fill = "#F14432", color = "transparent"),
+        element_rect(fill = "#BC191A", color = "transparent"),
+        element_rect(fill = "#D0E1F2", color = "transparent"),
+        element_rect(fill = "#94C4DF", color = "transparent"),
+        element_rect(fill = "#4A98C9", color = "transparent"),
+        element_rect(fill = "#1764AB", color = "transparent"),
+        element_rect(fill = "#E2E2EF", color = "transparent"),
+        element_rect(fill = "#B6B6D8", color = "transparent"),
+        element_rect(fill = "#8683BD", color = "transparent"),
+        element_rect(fill = "#62409B", color = "transparent")
+        ),
+        text_x = list(
+        element_text(color = "black", face = "bold", size = 2.4, margin = margin(1, 1, 1, 1))
+        ))) +
+  coord_cartesian(clip = "off") +
+  # xlab("             Homopolymer Length                             No of Repeated Units                         Length            ") +
+  ylab("IDA") +
+  scale_x_discrete(labels = setNames(pd$V3_lab, pd$MutationType)) +
+  ggtitle("                                                          >1bp Del                           >1bp Ins              Microhomology\n     1bp Del          1bp Ins                 (Del Length)                        (Ins Length)            (Del Length)") +
+  theme(panel.spacing = unit(0, "lines"),
+        panel.border = element_blank(),
+        panel.background = element_rect(fill = "white"),
+        strip.background = element_blank(),
+        axis.text.y = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text.y.right = element_text(angle = -90),
+        axis.ticks.y.right = element_blank(),
+        axis.title.y = element_text(size = 6),
+        axis.title.x = element_blank(),
+        plot.title = element_text(size = 3, margin = margin(b = -0.25)),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position = "none",
+        plot.margin = margin(0, 0, 0, 0))
+
+##################
+## ID83B denovo ##
+pd <- data.frame(MutationType = spe_denovo$MutationType,
+                 value = spe_denovo$ID83B) %>%
+  left_join(x = ., y = id_order, by = "MutationType")
+
+pd$MutationType <- factor(x = pd$MutationType, levels = id_order$MutationType)
+pd$V2 <- factor(x = pd$V2, levels = c("1:Del:C", "1:Del:T", "1:Ins:C", "1:Ins:T",
+                                      "2:Del:R", "3:Del:R", "4:Del:R", "5:Del:R",
+                                      "2:Ins:R", "3:Ins:R", "4:Ins:R", "5:Ins:R",
+                                      "2:Del:M", "3:Del:M", "4:Del:M", "5:Del:M"))
+
+p9 <- ggplot(data = pd, aes(x = MutationType, y = value*100)) +
+  geom_col(aes(fill = V2), alpha = 1, width = 0.8) +
+  scale_fill_manual(values = id.color) +
+  facet_grid2(. ~ V2, scales = "free", space = "free",
+              labeller = labeller(V2 = custom_labels),
+              strip = strip_themed(background_x = list(
+        element_blank(),
+        element_blank(),
+        element_blank(),
+        element_blank(),
+        element_blank(),
+        element_blank(),
+        element_blank(),
+        element_blank(),
+        element_blank(),
+        element_blank(),
+        element_blank(),
+        element_blank(),
+        element_blank(),
+        element_blank(),
+        element_blank(),
+        element_blank()
+        ),
+        text_x = list(
+        element_text(color = "transparent", face = "bold", size = 0, margin = margin(1, 1, 1, 1))
+        ))) +
+  coord_cartesian(clip = "off") +
+  ylab("IDB") +
+  scale_x_discrete(labels = setNames(pd$V3_lab, pd$MutationType)) +
+  theme(panel.spacing = unit(0, "lines"),
+        panel.border = element_blank(),
+        panel.background = element_rect(fill = "white"),
+        strip.background = element_blank(),
+        axis.text.y = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text.y.right = element_text(angle = -90),
+        axis.ticks.y.right = element_blank(),
+        axis.title.y = element_text(size = 6),
+        axis.title.x = element_blank(),
+        plot.title = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position = "none",
+        plot.margin = margin(0, 0, 0, 0))
+
+##################
+## ID83C denovo ##
+pd <- data.frame(MutationType = spe_denovo$MutationType,
+                 value = spe_denovo$ID83C) %>%
+  left_join(x = ., y = id_order, by = "MutationType")
+
+pd$MutationType <- factor(x = pd$MutationType, levels = id_order$MutationType)
+pd$V2 <- factor(x = pd$V2, levels = c("1:Del:C", "1:Del:T", "1:Ins:C", "1:Ins:T",
+                                      "2:Del:R", "3:Del:R", "4:Del:R", "5:Del:R",
+                                      "2:Ins:R", "3:Ins:R", "4:Ins:R", "5:Ins:R",
+                                      "2:Del:M", "3:Del:M", "4:Del:M", "5:Del:M"))
+
+p10 <- ggplot(data = pd, aes(x = MutationType, y = value*100)) +
+  geom_col(aes(fill = V2), alpha = 1, width = 0.8) +
+  scale_fill_manual(values = id.color) +
+  facet_grid2(. ~ V2, scales = "free", space = "free",
+              labeller = labeller(V2 = custom_labels),
+              strip = strip_themed(background_x = list(
+        element_blank(),
+        element_blank(),
+        element_blank(),
+        element_blank(),
+        element_blank(),
+        element_blank(),
+        element_blank(),
+        element_blank(),
+        element_blank(),
+        element_blank(),
+        element_blank(),
+        element_blank(),
+        element_blank(),
+        element_blank(),
+        element_blank(),
+        element_blank()
+        ),
+        text_x = list(
+        element_text(color = "transparent", face = "bold", size = 0, margin = margin(1, 1, 1, 1))
+        ))) +
+  coord_cartesian(clip = "off") +
+  ylab("IDC") +
+  xlab("             Homopolymer Length                             No of Repeated Units                         Length            ") +
+  scale_x_discrete(labels = setNames(pd$V3_lab, pd$MutationType)) +
+  theme(panel.spacing = unit(0, "lines"),
+        panel.border = element_blank(),
+        panel.background = element_rect(fill = "white"),
+        strip.background = element_blank(),
+        axis.text.y = element_blank(),
+        axis.text.x = element_text(size = 2.4),
+        axis.ticks = element_blank(),
+        axis.text.y.right = element_text(angle = -90),
+        axis.ticks.y.right = element_blank(),
+        axis.title.y = element_text(size = 6),
+        axis.title.x = element_text(size = 3),
+        plot.title = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position = "none",
+        plot.margin = margin(0, 0, 0, 0))
+
+## Combine all plots together
+id_combined <- p8 / p9 / p10 +
+  plot_layout(heights = c(1, 0.9, 1))
+```
+
+Panel C Bubble-based heatmap
+```{r}
+## Get Mutation count
+input_file <- "/mnt/data1/peter/repo/AAmanu/data/spp_wgs_uc.txt"
+input_catalog <- ICAMS::ReadCatalog(file = input_file)
+
+mut_counts <- input_catalog %>% colSums() %>%
+  as.data.frame() %>% 'colnames<-' ("mutCount") %>% 
+  rownames_to_column(var = "Samples") %>%
+  mutate(logmutCount = log10(mutCount / 1000 + 1))
+
+## Load SPE attribution res
+sbs_res <- data.table::fread("/mnt/data1/peter/repo/AAmanu/data/spe/wgs_uc/SBS96/Suggested_Solution/COSMIC_SBS96_Decomposed_Solution/Activities/COSMIC_SBS96_Activities.txt") %>%
+  as.data.frame() %>%
+  column_to_rownames(var = "Samples") %>%
+  sweep(1, rowSums(.), "/") %>% ## Normalize
+  mutate(across(where(is.numeric), ~ ifelse(.x < 0.05, 0, .x))) %>% ## Anything 0.05 set to and renormalize
+  sweep(1, rowSums(.), "/") %>%
+  rownames_to_column(var = "Samples") %>%
+  gather(data = ., key = "signatures", value = "value", -Samples) %>%
+  mutate(type = case_when(grepl(pattern = "_", x = Samples) ~ "ON",
+                          grepl(pattern = "T", x = Samples) ~ "T",
+                          grepl(pattern = "N", x = Samples) ~ "AN"),
+         group = paste0("UC", as.numeric(str_extract(Samples, "\\d+"))),
+         newName = paste0(group, type)) %>%
+  left_join(x = ., y = mut_counts, by = "Samples")
+
+## Factor order
+sample.order <- unique(sbs_res$newName)
+sbs_res$signatures <- factor(x = sbs_res$signatures, levels = rev(unique(sbs_res$signatures)))
+sbs_res$newName <- factor(x = sbs_res$newName, levels = sample.order)
+sbs_res$type <- factor(x = sbs_res$type, levels = c("T", "AN", "ON", "B", "U"))
+
+n_samp_per_patient <- sbs_res %>% dplyr::select(group, type) %>% distinct() %>% count(group)
+
+# Create alternating background dataframe
+bg_df <- sbs_res %>%
+  distinct(newName) %>%
+  mutate(
+    xmin = seq_along(newName) - 0.5,
+    xmax = seq_along(newName) + 0.5,
+    fill_bg = c(rep(c("grey80", "white"), each = 2),
+                rep(c("grey80"), each = 2),
+                rep(c("white"), each = 3),
+                rep(c("grey80", "white"), each = 2, time = 4))
+  )
+
+## Redesign sbs_label; bold AA signatures
+sbs_res$label <- ifelse(
+  as.character(sbs_res$signatures) %in% c("SBS22a"),
+  paste0("<b>", as.character(sbs_res$signatures), "</b>"),
+  as.character(sbs_res$signatures)
+)
+
+sbs_res$label <- factor(x = sbs_res$label,
+                        levels = rev(c("SBS1", "SBS2", "SBS5", "SBS13", "SBS18", "<b>SBS22a</b>")))
+
+p_main <- ggplot(data = sbs_res, aes(x = newName, y = label)) +
+  geom_rect(data = bg_df, aes(xmin = xmin, xmax = xmax,
+                              ymin = -Inf, ymax = Inf,
+                              fill = fill_bg),
+            inherit.aes = FALSE, alpha = 0.5) +
+  scale_fill_identity() +
+  ggnewscale::new_scale_fill() +
+  geom_point(aes(size = ifelse(value > 0, value, NA), fill = ifelse(value > 0, value, NA)), shape = 21, color = "black") +
+  scale_x_discrete(expand = c(0, 0)) +
+  scale_fill_viridis_c(name = "Value") +
+  scale_size_continuous(name = "Value", range = c(1, 2.5)) +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.title = element_blank(),
+        axis.text.y = element_markdown(size = 6),
+        axis.text.x = element_blank(),
+        axis.ticks = element_blank(),
+        legend.position = "none",
+        plot.margin = margin(0,0,0,0))
+
+#########
+## DBS ##
+#########
+load("/mnt/data1/peter/repo/AAmanu/data/AA_UTUC_data_Catalogs_Mutect.RData")
+
+## Get mutation count
+mut_counts <- catDBS$catDBS78 %>% as.data.frame() %>% colSums() %>% as.data.frame() %>%
+  'colnames<-' ("mutCount") %>% rownames_to_column(var = "Samples") %>%
+  mutate(logmutCount = log10(mutCount+1)) %>%
+  mutate(type = case_when(grepl(pattern = "_", x = Samples) ~ "ON",
+                          grepl(pattern = "T", x = Samples) ~ "T",
+                          grepl(pattern = "N", x = Samples) ~ "AN"),
+         group = paste0("UC", as.numeric(str_extract(Samples, "\\d+"))),
+         newName = paste0(group, type))
+
+## Load SPE attribution res
+dbs_res <- data.table::fread("/mnt/data1/peter/repo/AAmanu/data/spe/wgs_uc_dbs/DBS78/Suggested_Solution/COSMIC_DBS78_Decomposed_Solution/Activities/COSMIC_DBS78_Activities.txt") %>% as.data.frame() %>%
+  column_to_rownames(var = "Samples") %>%
+  sweep(1, rowSums(.), "/") %>%
+  mutate(across(where(is.numeric), ~ ifelse(.x < 0.05, 0, .x))) %>%
+  sweep(1, rowSums(.), "/") %>%
+  rownames_to_column(var = "Samples") %>%
+  gather(data = ., key = "signatures", value = "value", -Samples)
+  
+dbs_res <- dbs_res %>%  left_join(x = mut_counts, y = ., by = "Samples") ## Append mutation count
+dbs_res[which(is.na(dbs_res$signatures)), "signatures"] <- "DBS20" ## Add any signature to NA slots
+
+dbs_res <- dbs_res %>% mutate(value = ifelse(mutCount > 25, value, NA)) ## Forcing samples with less than 25 mutations to 0 for attribution. 
+
+## Factor order
+sample.order <- unique(dbs_res$newName)
+dbs_res$signatures <- factor(x = dbs_res$signatures, levels = rev(unique(dbs_res$signatures)))
+dbs_res$newName <- factor(x = dbs_res$newName, levels = sample.order)
+dbs_res$type <- factor(x = dbs_res$type, levels = c("T", "AN", "ON", "B", "U"))
+
+n_samp_per_patient <- dbs_res %>% dplyr::select(group, type) %>% distinct() %>% count(group)
+
+## Redesign dbs labels; bold AA signature
+dbs_res$label <- ifelse(
+  as.character(dbs_res$signatures) %in% c("DBS20"),
+  paste0("<b>", as.character(dbs_res$signatures), "</b>"),
+  as.character(dbs_res$signatures)
+)
+
+dbs_res$label <- factor(x = dbs_res$label,
+                        levels = rev(c("DBS2", "DBS6", "DBS11", "DBS13", "<b>DBS20</b>")))
+
+dbs_main <- ggplot(data = dbs_res, aes(x = newName, y = label)) +
+  geom_rect(data = bg_df, aes(xmin = xmin, xmax = xmax,
+                              ymin = -Inf, ymax = Inf,
+                              fill = fill_bg),
+            inherit.aes = FALSE, alpha = 0.5) +
+  scale_fill_identity() +
+  ggnewscale::new_scale_fill() +
+  geom_point(aes(size = ifelse(value > 0, value, NA), fill = ifelse(value > 0, value, NA)), shape = 21, color = "black") +
+  scale_x_discrete(expand = c(0, 0)) +
+  scale_fill_viridis_c(name = "Value") +
+  scale_size_continuous(name = "Value", range = c(1, 2.5)) +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.title = element_blank(),
+        axis.text.y = element_markdown(size = 6),
+        axis.text.x = element_blank(),
+        axis.ticks = element_blank(),
+        legend.position = "none",
+        plot.margin = margin(1,0,0,0))
+
+########
+## ID ##
+########
+
+load("/mnt/data1/peter/repo/AAmanu/data/AA_UTUC_data_Catalogs_Mutect.RData")
+
+## Get mutation count
+mut_counts <- catID$catalog %>% as.data.frame() %>% colSums() %>% as.data.frame() %>%
+  'colnames<-' ("mutCount") %>% rownames_to_column(var = "Samples") %>%
+  mutate(logmutCount = log10(mutCount+1)) %>%
+  mutate(type = case_when(grepl(pattern = "_", x = Samples) ~ "ON",
+                          grepl(pattern = "T", x = Samples) ~ "T",
+                          grepl(pattern = "N", x = Samples) ~ "AN"),
+         group = paste0("UC", as.numeric(str_extract(Samples, "\\d+"))),
+         newName = paste0(group, type))
+
+## Load SPE attribution results
+id_res <- data.table::fread("/mnt/data1/peter/repo/AAmanu/data/spe/wgs_uc_id/ID83/Suggested_Solution/COSMIC_ID83_Decomposed_Solution/Activities/COSMIC_ID83_Activities.txt") %>% as.data.frame() %>%
+  column_to_rownames(var = "Samples") %>%
+  sweep(1, rowSums(.), "/") %>%
+  mutate(across(where(is.numeric), ~ ifelse(.x < 0.05, 0, .x))) %>%
+  sweep(1, rowSums(.), "/") %>%
+  rownames_to_column(var = "Samples") %>%
+  gather(data = ., key = "signatures", value = "value", -Samples)
+  
+id_res <- id_res %>%  left_join(x = mut_counts, y = ., by = "Samples") ## Append mutation count data
+id_res[which(is.na(id_res$signatures)), "signatures"] <- "ID23" ## Add any signature to NA slots
+
+id_res <- id_res %>% mutate(value = ifelse(mutCount > 25, value, NA)) ## Forcing samples with less than 25 mutations to 0 for attribution.
+
+## Factor order
+sample.order <- unique(dbs_res$newName)
+id_res$signatures <- factor(x = id_res$signatures, levels = rev(unique(id_res$signatures)))
+id_res$newName <- factor(x = id_res$newName, levels = sample.order)
+id_res$type <- factor(x = id_res$type, levels = c("T", "AN", "ON", "B", "U"))
+
+n_samp_per_patient <- id_res %>% dplyr::select(group, type) %>% distinct() %>% count(group)
+
+## Redesign ID labels; bold AA signatures
+id_res$label <- ifelse(
+  as.character(id_res$signatures) %in% c("ID23"),
+  paste0("<b>", as.character(id_res$signatures), "</b>"),
+  as.character(id_res$signatures)
+)
+
+id_res$label <- factor(x = id_res$label,
+                        levels = rev(c("ID1", "ID2", "ID9", "<b>ID23</b>", "ID83C")))
+
+id_main <- ggplot(data = id_res, aes(x = newName, y = label)) +
+  geom_rect(data = bg_df, aes(xmin = xmin, xmax = xmax,
+                              ymin = -Inf, ymax = Inf,
+                              fill = fill_bg),
+            inherit.aes = FALSE, alpha = 0.5) +
+  scale_fill_identity() +
+  scale_x_discrete(expand = c(0, 0)) +
+  ggnewscale::new_scale_fill() +
+  geom_point(aes(size = ifelse(value > 0, value, NA), fill = ifelse(value > 0, value, NA)), shape = 21, color = "black") +
+  scale_fill_viridis_c(name = "Value") +
+  scale_size_continuous(name = "Value", range = c(1, 2.5)) +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.title = element_blank(),
+        axis.text.y = element_markdown(size = 6),
+        axis.text.x = element_blank(),
+        axis.ticks = element_blank(),
+        legend.position = "none",
+        plot.margin = margin(1,0,0,0))
+```
+
+Building annotation track for panel B
+```{r}
+############################################
+## Patient Track: Bottom annotation track ##
+sbs_res <- sbs_res %>%
+  mutate(patient_block = paste0("UC", as.numeric(str_extract(Samples, "\\d+"))))
+
+sampleblock.order <- c("UC2", "UC4", "UC5", "UC7", "UC10", "UC11", "UC13", "UC14", "UC18", "UC19", "UC26", "UC34")
+
+sbs_res$patient_block <- factor(x = sbs_res$patient_block, levels = sampleblock.order)
+
+sbs_res <- sbs_res %>%
+  group_by(patient_block) %>%
+  mutate(x = seq_along(newName)) %>%
+  ungroup()
+
+# add spacing between patients
+patient_sizes <- sbs_res %>%
+  count(patient_block)
+
+gap <- 0.25
+
+offsets <- cumsum(c(0, head(patient_sizes$n + gap, -1)))
+
+names(offsets) <- patient_sizes$patient_block
+
+sbs_res <- sbs_res %>%
+  group_by(patient_block) %>%
+  mutate(
+    x = seq_along(newName) + offsets[as.character(first(patient_block))]
+  ) %>%
+  ungroup()
+
+# centers for patient labels
+patient_df <- sbs_res %>%
+  group_by(patient_block) %>%
+  summarise(
+    xmin = min(x) - 0.5,
+    xmax = max(x) + 0.5,
+    xmid = (xmin + xmax) / 2
+  )
+
+sample_annot <- ggplot() + 
+  geom_rect(data = patient_df, aes(xmin = xmin, xmax = xmax,
+                                   ymin = 0.5, ymax = 1.5),
+            fill = "black") +
+  scale_x_continuous(breaks = patient_df$xmid, labels = patient_df$patient_block, expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0, 0), breaks = 1, labels = "Sample") +
+  theme(
+    axis.text.x = element_text(size = 5.5),
+    axis.text.y = element_text(size = 5.5),
+    axis.ticks = element_blank(),
+    plot.margin = margin(1,0,5,0))
+
+##########################
+## Top annotation track ##
+
+## Processing relevant files for plotting
+patientdata <- readxl::read_xlsx("/mnt/data1/peter/repo/AAmanu/data/patientinfo.xlsx") ## Patient meta data
+load("/mnt/data1/peter/repo/AAmanu/data/AA_UTUC_data_Catalogs_Mutect.RData") ## Mutation catalogue data
+
+## Extract TMB from each mutation class
+sbs <- as.data.frame(catSBS$catSBS96) %>% colSums() %>% as.data.frame() %>% dplyr::rename("sbs"=".") %>% 
+  rownames_to_column(var = "samples")
+dbs <- as.data.frame(catDBS$catDBS78) %>% colSums() %>% as.data.frame() %>% dplyr::rename("dbs"=".") %>% 
+  rownames_to_column(var = "samples")
+id <- as.data.frame(catID$catalog) %>% colSums() %>% as.data.frame() %>% dplyr::rename("id"=".") %>% 
+  rownames_to_column(var = "samples")
+
+## Combine mutation class into 1 df
+combined_wgs <- sbs %>% left_join(x = ., y = dbs, by = "samples") %>%
+  left_join(x = ., y = id, by = "samples") %>%
+  mutate(type = case_when(grepl(pattern = "_", x = samples) ~ "DN",
+                          grepl(pattern = "T", x = samples) ~ "T",
+                          grepl(pattern = "N", x = samples) ~ "AN"),
+         group = paste0("UC", as.numeric(str_extract(samples, "\\d+"))),
+         newName = paste0(group, type),
+         totalMut = sbs + dbs + id,
+         log10totalMut = log10(totalMut)) %>%
+  dplyr::select(group, type, log10totalMut) %>% 
+  spread(data = ., key = type, value = log10totalMut) %>%
+  dplyr::select(group, T, AN, DN)
+
+rm(sbs, dbs, id, catDBS, catID, catSBS) ## Clean up environment
+
+## Append mutation count and patient block data to patient meta data
+patientdata <- patientdata %>% left_join(x = ., y = combined_wgs, by = c("Sample"="group")); rm(combined_wgs)
+age_pd <- patientdata %>% left_join(x = ., y = patient_df, by = c("Sample"="patient_block"))
+
+###############
+## Age track ##
+
+## Age: Continuous to discrete
+age_cat <- cut(
+  age_pd$Age,
+  breaks = c(-Inf, 49, 70, Inf),
+  labels = c("<50", "50–70", "70+")
+)
+
+## Col annotation 
+age_cols <- c(
+  "<50" = "#FFF9C4",
+  "50–70" = "#F4E27A",
+  "70+"   = "#D68D00"
+)
+
+age_cat_annot <- ggplot(data = age_pd, aes(xmin = xmin, xmax = xmax,
+                                       ymin = 0.5, ymax = 1.5,
+                                       fill = age_cat)) +
+  geom_rect() +
+  scale_x_continuous(breaks = patient_df$xmid,
+                     labels = patient_df$patient_block,
+                     expand = c(0, 0)
+  ) +
+  scale_fill_manual(values = age_cols, name = "Age") +
+  scale_y_continuous(expand = c(0, 0), breaks = 1, labels = "Age") +
+  theme(
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(size = 5.5),
+    legend.direction = "horizontal",
+    legend.key.size = unit(0.2, "cm"),
+    legend.text = element_text(size = 5),
+    legend.title = element_text(size = 5),
+    legend.background = element_rect(fill = NA, color = NA),
+    legend.key = element_rect(fill = NA, color = NA),
+    axis.title = element_blank(),
+    axis.ticks = element_blank(),
+    plot.margin = margin(0,0,1,0),
+  )
+
+##################
+## Gender track ##
+gender_annot <- ggplot(data = age_pd, aes(xmin = xmin, xmax = xmax,
+                                       ymin = 0.5, ymax = 1.5,
+                                       fill = Gender)) +
+  geom_rect() +
+  scale_x_continuous(breaks = patient_df$xmid,
+                     labels = patient_df$patient_block,
+                     expand = c(0, 0)
+  ) +
+  scale_fill_manual(values = c("Male" = "#4C78A8",
+                               "Female" = "#F17CB0"),
+                    name = "Gender") +
+  scale_y_continuous(expand = c(0, 0), breaks = 1, labels = "Gender") +
+  theme(
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(size = 5.5),
+    legend.direction = "horizontal",
+    legend.key.size = unit(0.2, "cm"),
+    legend.text = element_text(size = 5),
+    legend.title = element_text(size = 5),
+    legend.background = element_rect(fill = NA, color = NA),
+    legend.key = element_rect(fill = NA, color = NA),
+    axis.title = element_blank(),
+    axis.ticks = element_blank(),
+    plot.margin = margin(0,0,1,0),
+  )
+
+#######################
+## Cancer type track ##
+cancer_cols <- c(
+  "Kidney" = "#7E57C2",
+  "Bladder" = "#EF4444",
+  "Ureter" = "#7C4B0D",
+  "Kidney/Ureter" = "#506A51"
+)
+
+## Factor order
+age_pd$`Tumor Site` <- factor(age_pd$`Tumor Site`, 
+                              levels = c("Bladder", "Kidney", "Ureter", "Kidney/Ureter"))
+
+cancer_annot <- ggplot(data = age_pd, aes(xmin = xmin, xmax = xmax,
+                                       ymin = 0.5, ymax = 1.5,
+                                       fill = `Tumor Site`)) +
+  geom_rect() +
+  scale_x_continuous(breaks = patient_df$xmid,
+                     labels = patient_df$patient_block,
+                     expand = c(0, 0)
+  ) +
+  scale_fill_manual(values = cancer_cols,
+                    labels = c("Kidney" = "Kidney(K)", ## Relabel legend to make it fit better
+                               "Bladder" = "Bladder",
+                               "Ureter" = "Ureter(U)",
+                               "Kidney/Ureter" = "K/U"
+  )) +
+  scale_y_continuous(expand = c(0, 0), breaks = 1, labels = "Cancer") +
+  theme(
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(size = 5.5),
+    legend.direction = "horizontal",
+    legend.key.size = unit(0.2, "cm"),
+    legend.text = element_text(size = 5),
+    legend.title = element_text(size = 5),
+    legend.background = element_rect(fill = NA, color = NA),
+    legend.key = element_rect(fill = NA, color = NA),
+    axis.title = element_blank(),
+    axis.ticks = element_blank(),
+    plot.margin = margin(0,0,1,0)
+  )
+
+##########################
+## Mutation count track ##
+
+## Update patient data dataframe formating
+
+## per sample annotation
+# add spacing between patients
+patient_sizes2 <- sbs_res %>%
+  count(newName)
+
+gap <- 0.25
+
+offsets <- cumsum(c(0, head(patient_sizes2$n + gap, -1)))
+
+names(offsets) <- patient_sizes2$newName
+
+sbs_res2 <- sbs_res %>%
+  group_by(newName) %>%
+  mutate(
+    x = seq_along(newName) + offsets[as.character(first(newName))]
+  ) %>%
+  ungroup()
+
+# centers for patient labels
+patient_df2 <- sbs_res2 %>%
+  group_by(newName) %>%
+  summarise(
+    xmin = min(x) - 0.5,
+    xmax = max(x) + 0.5,
+    xmid = (xmin + xmax) / 2
+  )
+
+patientdata_long <- patientdata %>% dplyr::select(Sample, T, AN, DN) %>%
+  gather(data = ., key = "type", value = "value", -Sample) %>%
+  filter(!is.na(value)) %>%
+  mutate(type = ifelse(type == "DN", "ON", type),
+         newName = paste0(Sample, type))
+
+## Append patient_df2 and patientdata_long together 
+tmb_pd <- patient_df2 %>% left_join(x = ., y = patientdata_long, by = c("newName")) %>%
+  mutate(type = ifelse(type == "ON", "DN", type))
+
+mut_annot <- ggplot(data = tmb_pd, aes(xmin = xmin, xmax = xmax,
+                                       ymin = 0.5, ymax = 1.5,
+                                       fill = value)) +
+  geom_rect() +
+  scale_x_continuous(breaks = patient_df$xmid,
+                     labels = patient_df$patient_block,
+                     expand = c(0, 0)
+  ) +
+  scale_fill_gradient(low = "#CF9B9B", high = "firebrick3", name = "log10TMB",
+                      limits = c(0, NA),
+                      breaks = seq(0, 10, by = 2.5),
+                      na.value = "grey95") +
+  scale_y_continuous(expand = c(0, 0), breaks = 1, labels = "TMB") +
+  theme(
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(size = 5.5),
+    legend.direction = "horizontal",
+    legend.key.size = unit(0.2, "cm"),
+    legend.text = element_text(size = 5),
+    legend.title = element_text(size = 5),
+    legend.background = element_rect(fill = NA, color = NA),
+    legend.key = element_rect(fill = NA, color = NA),
+    axis.title = element_blank(),
+    axis.ticks = element_blank(),
+    plot.margin = margin(0,0,1,0)
+  )
+
+#######################
+## Sample type track ##
+
+## Col annotation
+type_anno <- c("#A6A6A6", "#4F81BD", "#E9C46A")
+names(type_anno) <- c("AN", "T", "DN")
+
+## Factor order
+tmb_pd$type <- factor(x = tmb_pd$type, levels = c("T", "AN", "DN"))
+## Plot
+type_annot <- ggplot(data = tmb_pd, aes(xmin = xmin, xmax = xmax,
+                                       ymin = 0.5, ymax = 1.5,
+                                       fill = type)) +
+  geom_rect() +
+  scale_x_continuous(breaks = patient_df$xmid,
+                     labels = patient_df$patient_block,
+                     expand = c(0, 0)
+  ) +
+  scale_fill_manual(values = type_anno, name = "Tissue") +
+  scale_y_continuous(expand = c(0, 0), breaks = 1, labels = "Tissue") +
+  theme(
+    axis.text.x = element_blank(),
+    legend.direction = "horizontal",
+    legend.key.size = unit(0.2, "cm"),
+    legend.text = element_text(size = 5),
+    legend.title = element_text(size = 5),
+    legend.background = element_rect(fill = NA, color = NA),
+    legend.key = element_rect(fill = NA, color = NA),
+    axis.text.y = element_text(size = 5.5),
+    axis.title = element_blank(),
+    axis.ticks = element_blank(),
+    plot.margin = margin(0,0,1,0)
+  )
+
+
+##############################################
+## Heatmap legend key for main figures in B ##
+legend_df <- data.frame(x = 1,
+                        y = c(0, 0.25, 0.5, 0.75, 1),
+                        size = c(0, 1, 1.5, 2, 2.5))
+
+legend_plot <- ggplot() +
+  geom_tile(data = data.frame(x = seq(0, 1, length.out = 100), y = 1, fill = seq(0, 1, length.out = 100)),
+            aes(x, y, fill = fill), height = 2) +
+  geom_point(data = legend_df, aes(x = y, y = 1, size = size), shape = 21, fill = NA, colour = "black") +
+  ylab("Signature Attribution") +
+  coord_cartesian(xlim = c(0, 1),
+                  ylim = c(0.4, 1.6),
+                  clip = "off") +
+  scale_fill_viridis_c() +
+  scale_size_identity() +
+  theme_void() +
+  theme(legend.position = "none",
+        axis.title.y = element_text(size = 5.5))
+
+## Create empty plot for spacing
+empty_plot <- ggplot() + theme_void()
+## Size the legend so its not too large
+legend_row <- (empty_plot + legend_plot + empty_plot + plot_layout(widths = c(0.5, 1, 0.5)))
+
+## Compile all figures for heatmap with tracks
+combined_main <-
+  (age_cat_annot / gender_annot / cancer_annot / type_annot / mut_annot / p_main / dbs_main / id_main / sample_annot) / 
+   legend_row +
+  plot_layout(heights = c(0.1, 0.1, 0.1, 0.1, 0.1, 1, 0.9, 0.9, 0.1, 0.1),
+              guides = "collect") &
+  theme(legend.direction = "vertical",
+        legend.spacing.y = unit(5, "pt"),
+        legend.spacing.x = unit(0, "pt"),
+        legend.box.spacing = unit(2, "pt"),
+        legend.text = element_text(margin = margin(l = 1)),
+        legend.margin = margin(0, 0, 0, 0),
+        legend.box.margin = margin(0, -10, 0, 0),
+        legend.title = element_text(margin = margin(b = 2)))
+```
+
+Panel D Radar plot for SBS22a attribution
+```{r}
+## Format data to ggradar 
+spider.pd <- sbs_res %>%
+  dplyr::filter(Samples != "N7_kidney") %>%
+  mutate(type = ifelse(type == "T", "T", "N")) %>%
+  dplyr::filter(signatures == "SBS22a") %>%
+  dplyr::select(type, group, value) %>%
+  spread(data = ., key = group, value = value) %>%
+  dplyr::rename("Group"="type") %>%
+  column_to_rownames(var = "Group") %>%
+  t() %>% as.data.frame() %>%
+  arrange(desc(N), desc(T)) %>% 
+  t() %>% as.data.frame() %>% rownames_to_column(var = "Group")
+
+## Color annotation
+spider_anno <- c("#A6A6A6", "#4F81BD")
+names(spider_anno) <- c("N", "T")
+
+## Factor level
+spider.pd$Group <- factor(x = spider.pd$Group, levels = c("T", "N"))
+
+p20 <- ggradar(spider.pd,
+        background.circle.colour = "white",
+        font.radar = "Arial",
+        axis.label.size = 1.8,
+        values.radar = c("0", "0.5", "1"),
+        group.line.width = 0.25, group.point.size = 0.1,
+        group.colours = spider_anno,
+        fill = TRUE, fill.alpha = 0.5,
+        axis.line.colour = "gray80",
+        grid.label.size = 1.6,
+        grid.line.width = 0.25,
+        gridline.min.colour = "gray80",
+        gridline.mid.colour = "gray80",
+        gridline.max.colour = "gray80",
+        gridline.min.linetype = "solid",
+        gridline.mid.linetype = "solid",
+        gridline.max.linetype = "solid") +
+  guides(colour = guide_legend(override.aes = list(linetype = 0,  # remove line
+                                                   linewidth = 0,
+                                                   shape = 15,
+                                                   size = 2))) +
+  theme(plot.margin = margin(0,0,0,0),
+        legend.direction = "horizontal",
+        legend.text = element_text(size = 5, margin = margin(l = -12)),
+        legend.position = c(0.43, 1.35),
+        legend.justification = c(0.5, 1),
+        legend.background = element_blank(),
+        legend.key.spacing.x = unit(-0.3, "cm"),
+        legend.key = element_blank())
+
+## Manual fixes to the ggradar plotting
+p20$layers[[8]]$aes_params$linetype <- "dashed"
+p20$layers[[8]]$aes_params$linewidth <- 0.25
+```
+
+Panel B Comparison with denovo and cosmic signatures
+```{r}
+################################
+## Cosine similarity analysis ##
+
+#########
+## SBS ##
+sbs <- data.table::fread("/mnt/data1/peter/repo/AAmanu/data/spe/wgs_uc/SBS96/Suggested_Solution/SBS96_De-Novo_Solution/Signatures/SBS96_De-Novo_Signatures.txt") %>% as.data.frame()
+cosmic <- data.table::fread("/mnt/data1/peter/repo/AAmanu/data/spe/wgs_uc/SBS96/Suggested_Solution/COSMIC_SBS96_Decomposed_Solution/Signatures/COSMIC_SBS96_Signatures.txt") %>% as.data.frame()
+
+## How different are the signatures?
+mat1 <- as.matrix(sbs[,-1])
+mat2 <- as.matrix(cosmic[,-1])
+
+# Compute pairwise cosine similarity
+cos_matrix <- matrix(NA, ncol = ncol(mat2), nrow = ncol(mat1))
+
+for (i in 1:ncol(mat1)) {
+  for (j in 1:ncol(mat2)) {
+    cos_matrix[i, j] <- lsa::cosine(mat1[, i], mat2[, j])
+  }
+}
+rownames(cos_matrix) <- names(sbs)[-1]
+colnames(cos_matrix) <- names(cosmic)[-1]
+
+cos_hm <- as.data.frame(cos_matrix) %>% 
+  rownames_to_column(var = "De_novo_extracted") %>%
+  gather(data = ., key = "signature", value = "cs", -De_novo_extracted)
+
+#########
+## DBS ##
+dbs <- data.table::fread("/mnt/data1/peter/repo/AAmanu/data/spe/wgs_uc_dbs/DBS78/Suggested_Solution/DBS78_De-Novo_Solution/Signatures/DBS78_De-Novo_Signatures.txt") %>% as.data.frame()
+cosmic <- data.table::fread("/mnt/data1/peter/repo/AAmanu/data/spe/wgs_uc_dbs/DBS78/Suggested_Solution/COSMIC_DBS78_Decomposed_Solution/Signatures/COSMIC_DBS78_Signatures.txt") %>% as.data.frame()
+
+## How different are the signatures?
+mat1 <- as.matrix(dbs[,-1])
+mat2 <- as.matrix(cosmic[,-1])
+
+# Compute pairwise cosine similarity
+cos_matrix <- matrix(NA, ncol = ncol(mat2), nrow = ncol(mat1))
+
+for (i in 1:ncol(mat1)) {
+  for (j in 1:ncol(mat2)) {
+    cos_matrix[i, j] <- lsa::cosine(mat1[, i], mat2[, j])
+  }
+}
+rownames(cos_matrix) <- names(dbs)[-1]
+colnames(cos_matrix) <- names(cosmic)[-1]
+
+dbs_cos_hm <- as.data.frame(cos_matrix) %>% 
+  rownames_to_column(var = "De_novo_extracted") %>%
+  gather(data = ., key = "signature", value = "cs", -De_novo_extracted)
+
+########
+## ID ##
+id <- data.table::fread("/mnt/data1/peter/repo/AAmanu/data/spe/wgs_uc_id/ID83/Suggested_Solution/ID83_De-Novo_Solution/Signatures/ID83_De-Novo_Signatures.txt") %>% as.data.frame()
+cosmic <- data.table::fread("/mnt/data1/peter/repo/AAmanu/data/spe/wgs_uc_id/ID83/Suggested_Solution/COSMIC_ID83_Decomposed_Solution/Signatures/COSMIC_ID83_Signatures.txt") %>% as.data.frame()
+
+## How different are the signatures?
+mat1 <- as.matrix(id[,-1])
+mat2 <- as.matrix(cosmic[,-1])
+
+# Compute pairwise cosine similarity
+cos_matrix <- matrix(NA, ncol = ncol(mat2), nrow = ncol(mat1))
+
+for (i in 1:ncol(mat1)) {
+  for (j in 1:ncol(mat2)) {
+    cos_matrix[i, j] <- lsa::cosine(mat1[, i], mat2[, j])
+  }
+}
+rownames(cos_matrix) <- names(id)[-1]
+colnames(cos_matrix) <- names(cosmic)[-1]
+
+id_cos_hm <- as.data.frame(cos_matrix) %>% 
+  rownames_to_column(var = "De_novo_extracted") %>%
+  gather(data = ., key = "signature", value = "cs", -De_novo_extracted)
+
+## Combine all pairwise together in one dataframe
+combined_cos <- rbind(cos_hm, dbs_cos_hm, id_cos_hm)
+
+pd_cos <- combined_cos %>% dplyr::filter(cs > 0.79) %>% ## Keep >=0.79
+  spread(data = ., key = signature, value = cs) %>%
+  mutate(across(everything(), ~ifelse(is.na(.x), 0, .x))) %>% ## Anything NA replace with 0's because we didnt do DBS vs SBS, etc
+  gather(data = ., key = "signatures", value = "cs", -De_novo_extracted) %>%
+  dplyr::filter(De_novo_extracted != "ID83C",
+                signatures != "ID83C") ## There is no match for this signature. Just remove it. 
+
+## Factor order
+pd_cos$De_novo_extracted <- factor(x = pd_cos$De_novo_extracted,
+                                   levels = c(rev(c("SBS96A", "SBS96B", "SBS96C", "DBS78A", 
+                                                    "DBS78B", "ID83A", "ID83B"))))
+pd_cos$signatures <- factor(x = pd_cos$signatures,
+                            levels = c("SBS2", "SBS5", "SBS22a", "DBS11", "DBS20", "ID1", "ID23"))
+## Col annotation 
+pd_cos$group <- cut(pd_cos$cs,
+                    breaks = c(0, 0.79, 0.845, 0.895, 0.945, 1),
+                    include.lowest = TRUE)
+pd_cos$group <- factor(x = pd_cos$group, levels = rev(as.character(levels(pd_cos$group))))
+
+fill.color <- c("#3b528b", "#21918c", "#5ec962", "#fde725")
+
+p11 <- ggplot(data = pd_cos, aes(x = signatures, y = De_novo_extracted)) +
+  geom_tile(aes(fill = cs)) +
+  geom_text(aes(label = ifelse(cs >= 0.01, round(cs, 2), "")), size = 1.6) +
+  # scale_fill_manual(values = fill.color,
+  #                   labels = rev(c("<0.79", "0.79-0.85", "0.85–0.9", "0.9–0.95", "0.95–1"))) +
+  scale_fill_gradientn(
+    colours = fill.color,
+    breaks = c(0.80, 0.85, 0.90, 0.95, 1.00),
+    labels = c("0.80", "0.85", "0.90", "0.95", "1.00"),
+    limits = c(0.79, 1),
+    na.value = "#440154",
+    name = "Cosine\nSimilarity"
+  ) +
+  theme_bw() +
+  ylab(expression(italic("de novo") ~ Signatures)) + xlab("COSMIC Signatures") +
+  labs(fill = "Cosine\nSimilarity") +
+  theme(axis.title = element_text(size = 8),
+        axis.text.y = element_text(size = 6),
+        axis.text.x = element_text(size = 5, angle = 90, vjust = 0.5, hjust = 1),
+        legend.title = element_text(size = 6),
+        legend.key.size = unit(0.25, "cm"),
+        legend.box.margin = margin(0, 0, 0, -10),
+        legend.text = element_text(size = 5))
+```
+
+```{r}
+layout <- "
+AAABBBBB
+AAABBBBB
+AAABBBBB
+AAABBBBB
+AAACCCDD
+AAACCCDD
+GGGGGGGG
+HHHHHHHH
+HHHHHHHH"
+
+
+## Combine panel A together in one bigger panel for final assembly
+combined_denovo <- wrap_elements(sbs_combined) / wrap_elements(dbs_combined) / wrap_elements(id_combined) +
+  plot_layout(heights = c(1, 0.8, 1)) &
+  theme(plot.margin = margin(0, 0, 0, 0))
+
+combined_plot1 <- wrap_elements(combined_denovo) + wrap_elements(combined_main) + free(p11) + free(p20) + plot_layout(design=layout) + 
+  plot_annotation(tag_levels = list(c("A", "C", "B", "D", "E", "F", "G"))) &
+  theme(plot.tag = element_text(face = 'bold', size = 10,
+                                margin = margin(-8, 0, -4, -8)),
+        text = element_text(family = "Arial"))
+
+ggsave("/mnt/data1/peter/repo/AAmanu/figure/figure2.png", 
+       width = 170, height = 170,
+       units = "mm", dpi = 600)
+```

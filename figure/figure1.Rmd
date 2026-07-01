@@ -1,0 +1,236 @@
+---
+title: "figure1"
+output: html_document
+date: "2026-05-13"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(tidyverse)
+library(ggsankeyfier)
+library(patchwork)
+library(magick)
+library(grid)
+library(ggtext)
+```
+
+Figure 1 Panel B - Sankey plot
+```{r}
+## Load patient sequencing strategy
+metadata <- readxl::read_xlsx("/mnt/data1/peter/repo/AAmanu/data/sample_method.xlsx") %>% as.data.frame() %>%
+  mutate(method = ifelse(method == "WGA", "scWGS", method))
+metadata$group <- factor(x = metadata$group, levels = c("UC2", "UC4", "UC5", "UC7", "UC10", "UC11", "UC13", "UC14", "UC18", "UC19", "UC26", "UC34"))
+metadata$type <- factor(x = metadata$type, levels = c("T", "N", "B", "BF", "U"))
+metadata$method <- factor(x = metadata$method, levels = c("WGS", "DS", "scWGS"))
+
+## Convert data into ggsankeyfier formating
+pd <- metadata %>% mutate(flow = n()) %>%
+  pivot_stages_longer(c("group", "type", "method"), "flow", "type")
+
+## Factor order
+all.levels <- c("UC2", "UC4", "UC5", "UC7", "UC10", "UC11", "UC13", "UC14", "UC18", "UC19", "UC26", "UC34", "T", "N", "B", "BF", "U", "WGS", "DS", "scWGS")
+
+pd$node <- factor(x = pd$node, levels = rev(all.levels))
+
+## Manual override of ggsankey format. Prevent duplicate flow because more than 1 sequencing method
+for(n in 1:nrow(pd)) {
+  print(n)
+  what.stage <- as.character(pd[n,"stage"][[1]])
+  what.edge <- as.numeric(pd[n,"edge_id"])
+  if(what.stage == "group") {
+    what.flow <- as.numeric(pd[n, "flow"])
+    if(what.flow == 134) {
+      pd[n, "flow"] <- 134/2
+      pd[which(pd$edge_id == what.edge & pd$stage == "type"), "flow"] <- as.numeric(pd[which(pd$edge_id == what.edge & pd$stage == "type"), "flow"]) / 2
+    }
+  } else {
+    next
+  }
+}
+
+# tumor
+pd[which(pd$connector == "from" & pd$edge_id == "41"), "flow"] <- as.numeric(pd[which(pd$connector == "to" & pd$edge_id == "41"), "flow"]) / 2
+pd[which(pd$connector == "to" & pd$edge_id == "41"), "flow"] <- as.numeric(pd[which(pd$connector == "to" & pd$edge_id == "41"), "flow"]) / 2
+pd[which(pd$connector == "from" & pd$edge_id == "40"), "flow"] <- as.numeric(pd[which(pd$connector == "to" & pd$edge_id == "40"), "flow"]) / 2
+pd[which(pd$connector == "to" & pd$edge_id == "40"), "flow"] <- as.numeric(pd[which(pd$connector == "to" & pd$edge_id == "40"), "flow"]) / 2
+## normal
+pd[which(pd$connector == "from" & pd$edge_id == "42"), "flow"] <- as.numeric(pd[which(pd$connector == "to" & pd$edge_id == "42"), "flow"]) / 2
+pd[which(pd$connector == "to" & pd$edge_id == "42"), "flow"] <- as.numeric(pd[which(pd$connector == "to" & pd$edge_id == "42"), "flow"]) / 2
+pd[which(pd$connector == "from" & pd$edge_id == "43"), "flow"] <- as.numeric(pd[which(pd$connector == "to" & pd$edge_id == "43"), "flow"]) / 2
+pd[which(pd$connector == "to" & pd$edge_id == "43"), "flow"] <- as.numeric(pd[which(pd$connector == "to" & pd$edge_id == "43"), "flow"]) / 2
+##bf
+pd[which(pd$connector == "from" & pd$edge_id == "45"), "flow"] <- round(42.63636 * 7)
+pd[which(pd$connector == "from" & pd$edge_id == "46"), "flow"] <- round(42.63636 * 4)
+pd[which(pd$connector == "to" & pd$edge_id == "45"), "flow"] <- round(42.63636 * 7)
+pd[which(pd$connector == "to" & pd$edge_id == "46"), "flow"] <- round(42.63636 * 4)
+
+## Color annotation
+cols2 <- c(rep("transparent", times = 12), "#2F6DAE", "#F2C94C", "#E69F00", "#56B4E9", "#D55E00", rep("transparent", times = 3))
+names(cols2) <- all.levels
+
+## Plot sankey
+p <- ggplot(pd,
+       aes(x = stage, y = flow, group = node, connector = connector,
+           edge_id = edge_id))
+
+pos <- position_sankey(v_space = "auto", align = "justify", order = "as_is", width = 0.18)#, order = "descending")
+
+p10 <- p + geom_sankeyedge(aes(fill = type), position = pos, alpha = 0.75) +
+  scale_fill_manual(values = cols) +
+  ggnewscale::new_scale_fill() +
+  geom_sankeynode(position = pos, aes(fill = node)) +
+  scale_fill_manual(values = cols2) +
+  geom_text(aes(label = node), stat = "sankeynode", position = pos, size = 1.8) +
+  scale_x_discrete(expand = c(0.05, 0.05)) +
+  theme_void() +
+  theme(legend.position = "none")
+```
+
+Figure 1 Panel A (Right)
+```{r}
+## Load patient meta data
+patientdata <- readxl::read_xlsx("/mnt/data1/peter/repo/AAmanu/data/patientinfo.xlsx")
+
+#########
+## Age ##
+
+## Age: continuous to discrete
+age_cat <- cut(
+  patientdata$Age,
+  breaks = c(-Inf, 49, 70, Inf),
+  labels = c("<50", "50–70", "70+")
+)
+
+## Append to patientdata df
+patientdata$age_cat <- age_cat
+
+## Col annotation
+age_cols <- c(
+  "<50" = "#FFF9C4",
+  "50–70" = "#F4E27A",
+  "70+"   = "#D68D00"
+)
+
+# Plot data
+pd <- patientdata %>% dplyr::count(age_cat)
+ 
+# Compute percentages
+pd$fraction = pd$n / sum(pd$n)
+
+# Compute the cumulative percentages (top of each rectangle)
+pd$ymax = cumsum(pd$fraction)
+
+# Compute the bottom of each rectangle
+pd$ymin = c(0, head(pd$ymax, n=-1))
+
+# Compute label position
+pd$labelPosition <- (pd$ymax + pd$ymin) / 2
+
+# Redesign labels
+pd$label <- paste0("<b>", pd$age_cat, "</b><br>", round(pd$fraction * 100, 1), "%")
+
+## Plot age donut plot
+p11 <- ggplot(pd, aes(ymax=ymax, ymin=ymin, xmax=5, xmin=3, fill=age_cat)) +
+  geom_rect() +
+  geom_richtext(x = 5.2, aes(y = labelPosition, label = label), size = 1.6, color = "black",
+                family = "Arial", fill = NA, label.color = NA) +
+  scale_fill_manual(values = age_cols) +
+  coord_polar(theta="y", clip = "off") +
+  xlim(0, 5) +
+  annotate("text", x = 0, y = 0, label = "Age", 
+           color = "black", size = 1.8) +
+  theme_void() +
+  theme(legend.position = "none",
+        aspect.ratio = NULL,         # keeps plot square and centered
+        plot.margin = margin(-20, -20, -20, -20))  # reduce empty space
+
+#################
+## Cancer type ##
+pd.cancer <- patientdata %>% dplyr::count(`Tumor Site`)
+ 
+# Compute percentages
+pd.cancer$fraction = pd.cancer$n / sum(pd.cancer$n)
+
+# Compute the cumulative percentages (top of each rectangle)
+pd.cancer$ymax = cumsum(pd.cancer$fraction)
+
+# Compute the bottom of each rectangle
+pd.cancer$ymin = c(0, head(pd.cancer$ymax, n=-1))
+
+# Compute label position
+pd.cancer$labelPosition <- (pd.cancer$ymax + pd.cancer$ymin) / 2
+
+# Redesign labels
+pd.cancer$label <- paste0("<b>", pd.cancer$`Tumor Site`, "</b><br>", round(pd.cancer$fraction * 100, 1), "%")
+
+## Col annotation
+cancer_cols <- c(
+  "Kidney" = "#7E57C2",
+  "Bladder" = "#EF4444",
+  "Ureter" = "#7C4B0D",
+  "Kidney/Ureter" = "#506A51"
+)
+
+## Plot cancer type donut plot
+p12 <- ggplot(pd.cancer, aes(ymax=ymax, ymin=ymin, xmax=5, xmin=3, fill=`Tumor Site`)) +
+  geom_rect() +
+  # geom_text(x = 5.2, aes(y = labelPosition, label = label), size = 1.6, color = "black", family = "Arial") +
+  geom_richtext(x = 5.2, aes(y = labelPosition, label = label), size = 1.6, color = "black",
+                family = "Arial", fill = NA, label.color = NA) +
+  scale_fill_manual(values = cancer_cols) +
+  coord_polar(theta="y", clip = "off") +
+  xlim(0, 5) +
+  annotate("text", x = 0, y = 0, label = "Cancer", 
+           color = "black", size = 1.8) +
+  theme_void() +
+  theme(legend.position = "none",
+        aspect.ratio = NULL,         # keeps plot square and centered
+        plot.margin = margin(-20, -20, -20, -20))  # reduce empty space
+
+## Combine the two donut plots together
+pie_combined <- p11 / p12 +
+  plot_layout(heights = c(1, 1)) + theme(plot.margin = margin(0,0,0,0))
+```
+
+## Figure 1 Panel A (left)
+```{r}
+# Read image
+img <- image_read("/mnt/data1/peter/repo/AAmanu/data/Fig1A_left.png")
+
+# Convert to raster grob
+img_grob <- rasterGrob(
+  image = as.raster(img),
+  interpolate = TRUE
+)
+
+# Turn into a ggplot object
+img_plot <- ggplot() +
+  annotation_custom(img_grob, xmin=-Inf, xmax=Inf, ymin=-Inf, ymax=Inf) +
+  theme_void()
+```
+
+Figure to Panel using patchwork
+```{r}
+layout <- "
+AAAABCCC
+AAAABCCC
+ZZZZZZZZ
+ZZZZZZZZ
+ZZZZZZZZ
+ZZZZZZZZ
+ZZZZZZZZ
+ZZZZZZZZ"
+
+combined_plot1 <- img_plot + free(wrap_elements(pie_combined)) + p10 + plot_layout(design=layout) + 
+  plot_annotation(tag_levels = list(c("A", "", "B"))) &
+  theme(plot.tag = element_text(face = 'bold', size = 10),
+        text = element_text(family = "Arial"))
+
+ggsave("/mnt/data1/peter/repo/AAmanu/figure/figure1.png", 
+       width = 170, height = 170,
+       units = "mm", dpi = 600)
+```
+
+
+## Not in use
