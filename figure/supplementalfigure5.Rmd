@@ -1,0 +1,144 @@
+---
+title: "supplementalfigure5"
+output: html_document
+date: "2026-04-27"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(tidyverse)
+library(patchwork)
+library(ggpmisc)
+library(ggh4x)
+```
+
+Load SBS, DBS, ID and get mutation count
+```{r}
+sbs <- data.table::fread("/mnt/data1/peter/repo/AAmanu/data/matGen/ds_filtered/output/SBS/UC_AA.SBS96.all") %>% column_to_rownames(var = "MutationType") %>% 
+  summarise(across(where(is.numeric), ~sum(.x, na.rm = TRUE))) %>%
+  t() %>% as.data.frame() %>% 'colnames<-' ("SBS") %>% 
+  rownames_to_column(var = "Samples")
+dbs <- data.table::fread("/mnt/data1/peter/repo/AAmanu/data/matGen/ds_filtered/output/DBS/UC_AA.DBS78.all") %>% column_to_rownames(var = "MutationType") %>% 
+  summarise(across(where(is.numeric), ~sum(.x, na.rm = TRUE))) %>%
+  t() %>% as.data.frame() %>% 'colnames<-' ("DBS") %>% 
+  rownames_to_column(var = "Samples")
+id <- data.table::fread("/mnt/data1/peter/repo/AAmanu/data/matGen/ds_filtered/output/ID/UC_AA.ID83.all") %>% column_to_rownames(var = "MutationType") %>% 
+  summarise(across(where(is.numeric), ~sum(.x, na.rm = TRUE))) %>%
+  t() %>% as.data.frame() %>% 'colnames<-' ("ID") %>% 
+  rownames_to_column(var = "Samples")
+
+```
+
+```{r}
+## Process data for plotting
+combined_res <- sbs %>% left_join(x = ., y = dbs, by = "Samples") %>%
+  left_join(x = ., y = id, by = "Samples") %>%
+  gather(data = ., key = "class", value = "value", -Samples) %>%
+  mutate(type = case_when(grepl("_Blood", Samples) ~ "B",
+                          grepl("_Urine", Samples) ~ "U",
+                          grepl("_Kidney", Samples) ~ "N",
+                          grepl("T", Samples) ~ "T",
+                          grepl("N", Samples) ~ "N"),
+         group = gsub(pattern = "_Urine|_Blood|_Kidney|T|N", replacement = "", x = Samples)) %>%
+  mutate(Samples = case_when(grepl("_Blood", Samples) ~ gsub(pattern = "_Blood", replacement = "B", Samples),
+                             grepl("_Urine", Samples) ~ gsub(pattern = "_Urine", replacement = "U", Samples),
+                             grepl("_Kidney", Samples) ~ gsub(pattern = "_Kidney", replacement = "N", Samples),
+                             TRUE ~ Samples)) %>%
+  mutate(perMB = value / 48000 * 1e6) ## Count to perMB
+
+## Factor order
+sample.order <- c("UC2", "UC4", "UC5", "UC7", "UC10", "UC11", "UC13", "UC14", "UC18", "UC19", "UC26", "UC34")
+combined_res$group <- factor(x = combined_res$group, levels = sample.order)
+combined_res$type <- factor(x = combined_res$type, levels = c("T", "N", "B", "U"))
+combined_res$class <- factor(x = combined_res$class, levels = c("SBS", "DBS", "ID"))
+
+## Prepare data for snake plot
+snake_df <- combined_res %>%
+  group_by(class) %>%
+  arrange(perMB, .by_group = TRUE) %>%
+  mutate(rank = row_number()) %>%
+  ungroup() %>%
+  group_by(class) %>%
+  mutate(
+    x = rank + (cur_group_id() - 1) * max(rank)
+  )
+
+## Color annotation
+color_anno <- c("#A6A6A6", "#4F81BD", "#D7191C", "#FDAE61")
+names(color_anno) <- c("N", "T", "B", "U")
+
+## Alternating grey and white background for the 3 mutation class
+bg_df <- data.frame(
+  xmin = c(-0.5, 32.5, 64.5),
+  xmax = c(32.5, 64.5, 97.5),
+  fill = c("grey95", "white", "grey95")
+)
+
+## Compute the median for each mutation class
+med_df <- snake_df %>%
+  dplyr::group_by(class) %>%
+  dplyr::summarise(
+    med = median(log10(perMB + 1), na.rm = TRUE)
+  )
+
+p1 <- ggplot(snake_df, aes(x = x, y = log10(perMB+1))) +
+  geom_rect(
+    data = bg_df,
+    aes(xmin = xmin, xmax = xmax,
+        ymin = -Inf, ymax = Inf),
+    inherit.aes = FALSE,
+    fill = bg_df$fill,
+    color = NA
+  ) +
+  geom_point(aes(color = type), size = 0.5) +
+     geom_segment(x = 16.5 - 12, xend = 16.5 + 12,
+             y = 3.69, yend = 3.69,
+             color = "grey35", linewidth = 0.2) +
+   geom_segment(x = 48.5 - 12, xend = 48.5 + 12,
+             y = 1.86, yend = 1.86,
+             color = "grey35", linewidth = 0.2) +
+   geom_segment(x = 80.5 - 12, xend = 80.5 + 12,
+             y = 2.38, yend = 2.38,
+             color = "grey35", linewidth = 0.2) +
+  scale_color_manual(values = color_anno) +
+  ylab(expression("log"[10]*"(Mutation per MB)")) +
+  scale_x_continuous(breaks = c(16.5, 48.5, 80.5),
+                     labels = c("SBS", "DBS", "ID"),
+                     expand = expansion(add = 1)) +
+  scale_y_continuous(limits = c(0, NA)) +
+  theme_bw() +
+  theme(axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text = element_text(size = 6),
+        axis.title.y = element_text(size = 8),
+        legend.key.size = unit(0.3, "cm"),
+        legend.text = element_text(size = 5),
+        legend.margin = margin(0, 0, 0, 0),
+        legend.title = element_blank(),
+        panel.grid = element_blank())
+```
+
+```{r}
+layout <- "
+AABBBBBB
+AABBBBBB
+ZZZZZZZZ
+ZZZZZZZZ
+ZZZZZZZZ
+ZZZZZZZZ
+ZZZZZZZZ
+ZZZZZZZZ"
+
+dev.off()
+
+combined_plot1 <- p1 + plot_layout(design=layout) + 
+  plot_annotation(tag_levels = list(c(""))) &
+  theme(plot.tag = element_text(face = 'bold', size = 10),
+        text = element_text(family = "Arial"))
+
+ggsave("/mnt/data1/peter/repo/AAmanu/figure/supplementalfigure5.png", 
+       width = 170, height = 140,
+       units = "mm", dpi = 600)
+```
+
