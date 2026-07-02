@@ -1,0 +1,189 @@
+---
+title: "supplementalfigure1"
+output: html_document
+date: "2026-06-25"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(tidyverse)
+library(data.table)
+library(patchwork)
+```
+
+
+```{r}
+## Sample map for linking patient id with sample file name
+ID <- c("UC2", "UC4", "UC5", "UC7", "UC10", "UC11", "UC13", "UC14", "UC18", "UC19", "UC26", "UC34")
+Tumor <- c(2, 4, 5, 7, 10, 11, 13, 14, 18, 19, 26, 34)
+Normal <- c(28, 4, 38, 33, 43, 44, 13, 1, 26, 10, 19, 42)
+  
+sample.map <- data.frame(ID = ID, Tumor = Tumor, Normal = Normal) %>%
+  mutate(Tumor = paste0("T",Tumor),
+         Normal = paste0("N",Normal))
+
+## Loop through each patient and process tumor and normal samples
+files <- list.files(path = "/mnt/storage/peter/steve_aa/vcfs_UTUC_genomes/", pattern = "SNV")
+
+all_vaf <- list()
+for(n in ID) {
+  message("Working on ", n)
+  ## What samplename for tumor and normal is patient
+  t.num <- sample.map %>% dplyr::filter(ID == n) %>% pull(Tumor) %>% paste0("_", .,"_")
+  n.num <- sample.map %>% dplyr::filter(ID == n) %>% pull(Normal) %>% paste0("_", .,"_")
+  ## What file name
+  t.file <- files[grepl(pattern = t.num, x = files)]
+  n.file <- files[grepl(pattern = n.num, x = files)]
+  
+  t.data <- data.table::fread(paste0("/mnt/storage/peter/steve_aa/vcfs_UTUC_genomes/", t.file), skip = "#CHROM")
+  t.data[, c("DP","FDP", "SDP", "SUBDP","AU","CU","GU","TU") := data.table::tstrsplit(TUMOR, ":", fixed=TRUE)]
+  t.data[, AU := as.numeric(tstrsplit(AU, ",", fixed=TRUE)[[1]])]
+  t.data[, CU := as.numeric(tstrsplit(CU, ",", fixed=TRUE)[[1]])]
+  t.data[, GU := as.numeric(tstrsplit(GU, ",", fixed=TRUE)[[1]])]
+  t.data[, TU := as.numeric(tstrsplit(TU, ",", fixed=TRUE)[[1]])]
+  t.data[, vaf := {
+    alt_counts <- fifelse(ALT=="A", AU,
+                  fifelse(ALT=="C", CU,
+                  fifelse(ALT=="G", GU,
+                  TU)))
+
+  as.numeric(alt_counts) / as.numeric(DP)
+  }]
+  
+  t.data[, alt_counts := {
+    alt_counts <- fifelse(ALT=="A", AU,
+                  fifelse(ALT=="C", CU,
+                  fifelse(ALT=="G", GU,
+                  TU)))
+    as.numeric(alt_counts)
+  }]
+  
+  t.data$group <- n
+  t.data$type <- "T"
+  
+  t.data <- t.data %>% dplyr::select(group, type, vaf, alt_counts, DP)
+  
+  n.data <- data.table::fread(paste0("/mnt/storage/peter/steve_aa/vcfs_UTUC_genomes/", n.file), skip = "#CHROM")
+  n.data[, c("DP","FDP", "SDP", "SUBDP","AU","CU","GU","TU") := data.table::tstrsplit(TUMOR, ":", fixed=TRUE)]
+  n.data[, AU := as.numeric(tstrsplit(AU, ",", fixed=TRUE)[[1]])]
+  n.data[, CU := as.numeric(tstrsplit(CU, ",", fixed=TRUE)[[1]])]
+  n.data[, GU := as.numeric(tstrsplit(GU, ",", fixed=TRUE)[[1]])]
+  n.data[, TU := as.numeric(tstrsplit(TU, ",", fixed=TRUE)[[1]])]
+  n.data[, vaf := {
+    alt_counts <- fifelse(ALT=="A", AU,
+                  fifelse(ALT=="C", CU,
+                  fifelse(ALT=="G", GU,
+                  TU)))
+
+  as.numeric(alt_counts) / as.numeric(DP)
+  }]
+  
+  n.data[, alt_counts := {
+    alt_counts <- fifelse(ALT=="A", AU,
+                  fifelse(ALT=="C", CU,
+                  fifelse(ALT=="G", GU,
+                  TU)))
+    as.numeric(alt_counts)
+  }]
+  
+  n.data$group <- n
+  n.data$type <- "N"
+  
+  n.data <- n.data %>% dplyr::select(group, type, vaf, alt_counts, DP)
+  
+  all_vaf[[n]] <- combined_res <- rbind(t.data, n.data)
+}
+
+all_vaf <- as.data.frame(do.call(rbind, all_vaf))
+
+## Now do kidney 7 independently (Distant normal) - UC7 had an extra normal sample
+n.data <- data.table::fread(paste0("/mnt/storage/peter/steve_aa/vcfs_UTUC_genomes/AA_UTUC_Taiwan_N7_kidney_SNVintersect.vcf.gz"), skip = "#CHROM")
+n.data[, c("DP","FDP", "SDP", "SUBDP","AU","CU","GU","TU") := data.table::tstrsplit(TUMOR, ":", fixed=TRUE)]
+n.data[, AU := as.numeric(tstrsplit(AU, ",", fixed=TRUE)[[1]])]
+n.data[, CU := as.numeric(tstrsplit(CU, ",", fixed=TRUE)[[1]])]
+n.data[, GU := as.numeric(tstrsplit(GU, ",", fixed=TRUE)[[1]])]
+n.data[, TU := as.numeric(tstrsplit(TU, ",", fixed=TRUE)[[1]])]
+n.data[, vaf := {
+    alt_counts <- fifelse(ALT=="A", AU,
+                  fifelse(ALT=="C", CU,
+                  fifelse(ALT=="G", GU,
+                  TU)))
+
+  as.numeric(alt_counts) / as.numeric(DP)
+  }]
+
+n.data[, alt_counts := {
+    alt_counts <- fifelse(ALT=="A", AU,
+                  fifelse(ALT=="C", CU,
+                  fifelse(ALT=="G", GU,
+                  TU)))
+    as.numeric(alt_counts)
+  }]
+  
+n.data$group <- "UC7"
+n.data$type <- "Kidney"
+  
+n.data <- n.data %>% dplyr::select(group, type, vaf, alt_counts, DP)
+
+## Append UC7DN to data
+all_vaf <- rbind(all_vaf, n.data)
+all_vaf <- all_vaf %>% mutate(hr_type = case_when(type == "T" ~ "Tumor",
+                                                  type == "N" ~ "Normal",
+                                                  type == "Kidney" ~ "Kidney"))
+## Convert UC4 distant normal to Bladder
+all_vaf[which(all_vaf$type == "N" & all_vaf$group == "UC4"), "hr_type"] <- "Bladder"
+
+## Factor order
+all_vaf$group <- factor(x = all_vaf$group, 
+                        levels = c("UC2", "UC4", "UC5", "UC7", "UC10", "UC11", "UC13", "UC14", "UC18", "UC19", "UC26", "UC34"))
+
+all_vaf$hr_type <- factor(x = all_vaf$hr_type, levels = c("Tumor", "Normal", "Kidney", "Bladder"))
+
+## Color annotation
+type_anno <- c("#A6A6A6", "#4F81BD", "#E9C46A", "#6A4C93")
+names(type_anno) <- c("Normal", "Tumor", "Kidney", "Bladder")
+
+p1 <- ggplot(data = all_vaf, aes(x = vaf, fill = hr_type)) +
+  geom_histogram(binwidth = 0.025, position = "identity", alpha = 0.6, color = "black") +
+  scale_fill_manual(values = type_anno) + 
+  facet_wrap(.~group, scale = "free_y", ncol = 3) +
+  theme_bw() +
+  ylab("Frequency") + xlab("VAF") +
+  theme(panel.grid = element_blank(),
+        axis.text = element_text(size = 6),
+        axis.title = element_text(size = 8),
+        legend.title = element_blank(),
+        legend.position = c(0.65, -0.15),
+        legend.justification = c(1,0),
+        legend.direction = "horizontal",
+        legend.key.size = unit(0.2, "cm"),
+        legend.text = element_text(size = 5),
+        strip.background = element_blank(),
+        strip.text = element_text(size = 8, face = "bold")
+        )
+
+layout <- "
+AAAAAAAA
+AAAAAAAA
+AAAAAAAA
+AAAAAAAA
+AAAAAAAA
+AAAAAAAA
+GGGGGGGG
+GGGGGGGG
+GGGGGGGG"
+
+dev.off()
+
+combined_plot1 <- p1 + plot_layout(design=layout) + 
+  plot_annotation(tag_levels = list(c(""))) &
+  theme(plot.tag = element_text(face = 'bold', size = 10,
+                                margin = margin(-8, 0, -4, -8)),
+        text = element_text(family = "Arial"))
+
+ggsave("/mnt/data1/peter/repo/AAmanu/figure/supplementalfigure1.png", 
+       width = 170, height = 170,
+       units = "mm", dpi = 600)
+```
+
