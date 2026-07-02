@@ -1047,44 +1047,7 @@ combined_plot1 <- wrap_elements(uc2) + wrap_elements(uc4) + wrap_elements(uc5) +
         text = element_text(family = "Arial"),
         plot.margin = margin(0, 0, 0, 0))
 
-ggsave("/mnt/storage/peter/repo/manuAA/code/supplemental_fig/wgs_all_sbs96_6_final.png", 
+ggsave("/mnt/data1/peter/repo/AAmanu/figure/supplementalfigure2.png", 
        width = 170, height = 200,
        units = "mm", dpi = 600)
 ```
-
-
-```{r}
-## SBSB decompose
-sbs2_13 <- v35$SBS2 + v35$SBS13
-sbs2_13 <- sbs2_13 / sum(sbs2_13)
-
-cs_value2 <- round(lsa::cosine(spe_denovo$SBS96B, sbs2_13), digits = 2)[[1]]
-
-anno <- data.frame(MutationType = spe_denovo$MutationType, value = spe_denovo$SBS96B) %>% 
-  left_join(x = ., y = sbs.df, by = c("MutationType"="V1")) %>%
-  dplyr::filter(V2 == "T>G") %>%
-  mutate(x = Inf, y = Inf)
-      
-p3 <- plotSBSnostrip(df = data.frame(MutationType = spe_denovo$MutationType, value = spe_denovo$SBS96B), 
-              x.label = NULL, y.label = "SBSB", strip.color = "transparent", strip.size = 0) +
-  geom_text(data = anno[1, ], aes(x = x, y = y, label = paste0("SBS2+13 = ", cs_value2)), 
-            inherit.aes = FALSE, size = 1.8, 
-            vjust = 1.1, hjust = 1) +
-  theme(axis.ticks.y = element_blank(),
-        axis.text.x = element_blank(),
-        axis.text.y = element_blank(),
-        axis.title.y = element_text(size = 6),
-        axis.title.x = element_blank(),
-        plot.margin = margin(0, 0, 0, 0))
-
-## SBSC decompose
-sbs1_5 <- (v35$SBS1*139) + (v35$SBS5*738)
-sbs1_5 <- sbs1_5 / sum(sbs1_5)
-cs_value3 <- round(lsa::cosine(spe_denovo$SBS96C, sbs1_5), digits = 2)[[1]]
-
-anno <- data.frame(MutationType = spe_denovo$MutationType, value = spe_denovo$SBS96C) %>% 
-  left_join(x = ., y = sbs.df, by = c("MutationType"="V1")) %>%
-  dplyr::filter(V2 == "T>G") %>%
-  mutate(x = Inf, y = Inf)
-```
-

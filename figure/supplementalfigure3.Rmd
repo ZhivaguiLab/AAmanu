@@ -1,0 +1,222 @@
+---
+title: "supplementalfigure3"
+output: html_document
+date: "2026-05-02"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(tidyverse)
+library(patchwork)
+library(ggh4x)
+library(mSigAct)
+library(ggradar)
+```
+
+Load data
+```{r}
+#########
+## SBS ##
+#########
+
+## Mutation count
+input_file <- "/mnt/data1/peter/repo/AAmanu/data/spp_wgs_uc.txt"
+input_catalog <- ICAMS::ReadCatalog(file = input_file)
+
+mut_counts <- input_catalog %>% colSums() %>%
+  as.data.frame() %>% 'colnames<-' ("mutCount") %>% 
+  rownames_to_column(var = "Samples") %>%
+  mutate(logmutCount = log10(mutCount / 1000 + 1))
+
+## Assignment result
+sbs_res <- data.table::fread("/mnt/data1/peter/repo/AAmanu/data/spe/wgs_uc/SBS96/Suggested_Solution/COSMIC_SBS96_Decomposed_Solution/Activities/COSMIC_SBS96_Activities.txt") %>% as.data.frame() %>%
+  column_to_rownames(var = "Samples") %>%
+  sweep(1, rowSums(.), "/") %>%
+  mutate(across(where(is.numeric), ~ ifelse(.x < 0.05, 0, .x))) %>%
+  sweep(1, rowSums(.), "/") %>%
+  rownames_to_column(var = "Samples") %>%
+  gather(data = ., key = "signatures", value = "value", -Samples) %>%
+  mutate(type = case_when(grepl(pattern = "_", x = Samples) ~ "ON",
+                          grepl(pattern = "T", x = Samples) ~ "T",
+                          grepl(pattern = "N", x = Samples) ~ "AN"),
+         group = paste0("UC", as.numeric(str_extract(Samples, "\\d+"))),
+         newName = paste0(group, type)) %>% 
+  left_join(x = ., y = mut_counts, by = "Samples")
+
+#########
+## DBS ##
+#########
+load("/mnt/data1/peter/repo/AAmanu/data/AA_UTUC_data_Catalogs_Mutect.RData")
+
+mut_counts <- catDBS$catDBS78 %>% as.data.frame() %>% colSums() %>% as.data.frame() %>%
+  'colnames<-' ("mutCount") %>% rownames_to_column(var = "Samples") %>%
+  mutate(logmutCount = log10(mutCount+1)) #%>%
+
+## Assignment result
+dbs_res <- data.table::fread("/mnt/data1/peter/repo/AAmanu/data/spe/wgs_uc_dbs/DBS78/Suggested_Solution/COSMIC_DBS78_Decomposed_Solution/Activities/COSMIC_DBS78_Activities.txt") %>% as.data.frame() %>%
+  column_to_rownames(var = "Samples") %>%
+  sweep(1, rowSums(.), "/") %>%
+  mutate(across(where(is.numeric), ~ ifelse(.x < 0.05, 0, .x))) %>%
+  sweep(1, rowSums(.), "/") %>%
+  rownames_to_column(var = "Samples") %>%
+  gather(data = ., key = "signatures", value = "value", -Samples) %>%
+  mutate(type = case_when(grepl(pattern = "_", x = Samples) ~ "ON",
+                          grepl(pattern = "T", x = Samples) ~ "T",
+                          grepl(pattern = "N", x = Samples) ~ "AN"),
+         group = paste0("UC", as.numeric(str_extract(Samples, "\\d+"))),
+         newName = paste0(group, type)) %>% 
+  left_join(x = ., y = mut_counts, by = "Samples")
+  
+dbs_res <- dbs_res %>% mutate(value = ifelse(mutCount > 25, value, NA)) ## Forcing samples with less than 25 mutations to 0 for attribution. 
+
+########
+## ID ##
+########
+
+mut_counts <- catID$catalog %>% as.data.frame() %>% colSums() %>% as.data.frame() %>%
+  'colnames<-' ("mutCount") %>% rownames_to_column(var = "Samples") %>%
+  mutate(logmutCount = log10(mutCount+1)) 
+
+## Assignment result
+id_res <- data.table::fread("/mnt/data1/peter/repo/AAmanu/data/spe/wgs_uc_id/ID83/Suggested_Solution/COSMIC_ID83_Decomposed_Solution/Activities/COSMIC_ID83_Activities.txt") %>% as.data.frame() %>%
+  column_to_rownames(var = "Samples") %>%
+  sweep(1, rowSums(.), "/") %>%
+  mutate(across(where(is.numeric), ~ ifelse(.x < 0.05, 0, .x))) %>%
+  sweep(1, rowSums(.), "/") %>%
+  rownames_to_column(var = "Samples") %>%
+  gather(data = ., key = "signatures", value = "value", -Samples) %>%
+  mutate(type = case_when(grepl(pattern = "_", x = Samples) ~ "ON",
+                          grepl(pattern = "T", x = Samples) ~ "T",
+                          grepl(pattern = "N", x = Samples) ~ "AN"),
+         group = paste0("UC", as.numeric(str_extract(Samples, "\\d+"))),
+         newName = paste0(group, type)) %>% 
+  left_join(x = ., y = mut_counts, by = "Samples")
+
+id_res <- id_res %>% mutate(value = ifelse(mutCount > 25, value, NA)) ## Forcing samples with less than 25 mutations to 0 for attribution.
+```
+
+co-occurence analysis with fishers test
+```{r}
+## Combine SBS DBS and ID 
+combined_res <- sbs_res %>% dplyr::select(names(dbs_res)) %>%
+  rbind(., dbs_res, id_res) %>%
+  mutate(status = ifelse(value > 0.05, 1, 0)) ## presence (>5%) or absence
+
+## List of all cosmic signatures in combined_res
+cosmic_sig <- as.character(unique(combined_res$signatures))
+
+## Pairwise comparison between COSMIC signatures
+co_res <- list() ## co occurrence results
+for(i in cosmic_sig) {
+  print(i)
+  for(j in cosmic_sig) {
+    print(j)
+    if(j == i) { ## If i and j are the same signature. skip.
+      next
+    } else {
+      contig_tbl <- combined_res %>% dplyr::filter(signatures %in% c(i, j)) %>%
+        dplyr::select(newName, signatures, status) %>%
+        spread(data = ., key = signatures, value = status) %>%
+        mutate(across(everything(), ~replace_na(.x, 0))) %>%
+        'colnames<-' (c("Samples", "Sig1", "Sig2"))
+      
+      contig_tbl <- table(factor(contig_tbl$Sig1, levels = c(0, 1)),
+                          factor(contig_tbl$Sig2, levels = c(0, 1)))
+    
+      co.test <- fisher.test(contig_tbl) ## co occurrence
+      
+      # Haldane-Anscombe correction in case zero cell count
+      corrected_or <- ((contig_tbl[2,2]+0.5) * (contig_tbl[1,1]+0.5)) / ((contig_tbl[2,1]+0.5) * (contig_tbl[1,2]+0.5))
+    
+      co_res[[paste0(i,"_",j)]] <- data.frame(Sig1 = i,
+                                              Sig2 = j,
+                                              Sig1only = contig_tbl[2,1],
+                                              Sig2only = contig_tbl[1,2],
+                                              Neither = contig_tbl[1,1],
+                                              Both = contig_tbl[2,2],
+                                              pval = co.test$p.value,
+                                              or = co.test$estimate,
+                                              halane_anscombe_correction_or = log2(corrected_or))
+    }
+  }
+}
+
+co_res <- as.data.frame(do.call(rbind, co_res))
+co_res$padj <- p.adjust(co_res$pval, method = "BH") ## FDR
+
+## Process data for plotting
+co_res_pd <- co_res %>% dplyr::select(Sig1, Sig2, halane_anscombe_correction_or) %>%
+  spread(data = ., key = "Sig2", value = "halane_anscombe_correction_or") %>% 
+  column_to_rownames(var = "Sig1") %>%
+  mutate(across(everything(), ~replace_na(., 0)))
+
+hc <- hclust(dist(co_res_pd), method = "average")
+order_sig <- hc$labels[hc$order]
+order_sig <- order_sig[c(1:4,6,5,7:16)]
+
+## Using OLO optimal leaf ordering 
+library(seriation)
+library(dendsort)
+d <- dist(co_res_pd)
+ord <- seriate(d, method = "OLO")  # optimal leaf ordering
+order_sig <- get_order(ord) %>% names()
+
+## Factor order based on OLO
+co_res$Sig1 <- factor(co_res$Sig1, levels = order_sig)
+co_res$Sig2 <- factor(co_res$Sig2, levels = order_sig)
+
+max_abs <- round(max(abs(co_res$halane_anscombe_correction_or), na.rm = TRUE))
+
+p12 <- ggplot(co_res, aes(x = Sig1, y = Sig2, fill = halane_anscombe_correction_or)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "dodgerblue", mid = "white", high = "firebrick3",
+                       midpoint = 0,
+                       limits = c(-max_abs, max_abs),
+                       name = expression(log[2](OR))) +
+  scale_size_continuous(name = "p-value", range = c(3, 1)) +
+  geom_abline(slope = 1, intercept = 0, color = "black", linewidth = 0.2) +
+  geom_segment(aes(x = 4.5, xend = 4.5, y = 0.5, yend = 4.5), linetype = "dashed", linewidth = 0.2) +
+  geom_segment(aes(x = 0.5, xend = 4.5, y = 4.5, yend = 4.5), linetype = "dashed", linewidth = 0.2) +
+  geom_segment(aes(x = 5.5, xend = 12.5, y = 12.5, yend = 12.5), linetype = "dashed", linewidth = 0.2) +
+  geom_segment(aes(x = 5.5, xend = 12.5, y = 5.5, yend = 5.5), linetype = "dashed", linewidth = 0.2) +
+  geom_segment(aes(x = 12.5, xend = 12.5, y = 5.5, yend = 12.5), linetype = "dashed", linewidth = 0.2) +
+  geom_segment(aes(x = 5.5, xend = 5.5, y = 5.5, yend = 12.5), linetype = "dashed", linewidth = 0.2) +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.title = element_blank(),
+        axis.text.y = element_text(size = 6),
+        axis.text.x = element_text(size = 6, angle = 90, vjust = 0.5, hjust = 1),
+        axis.ticks = element_blank(),
+        plot.margin = margin(0,0,0,0),
+        legend.key.size = unit(0.2, "cm"),
+        legend.text = element_text(size = 5),
+        legend.title = element_text(size = 5),
+        legend.box.spacing = unit(3, "pt"),
+        legend.background = element_rect(fill = NA, color = NA),
+        legend.key = element_rect(fill = NA, color = NA))
+```
+
+```{r}
+layout <- "
+AAZZZZZZ
+AAZZZZZZ
+HHHHHHHH
+HHHHHHHH
+HHHHHHHH
+HHHHHHHH
+HHHHHHHH
+HHHHHHHH"
+
+dev.off()
+
+combined_plot1 <-  p12 + plot_layout(design=layout) +
+  plot_annotation(tag_levels = list(c(""))) &
+  theme(plot.tag = element_text(face = 'bold', size = 10),
+        text = element_text(family = "Arial"))
+
+ggsave("/mnt/data1/peter/repo/AAmanu/figure/supplementalfigure3.png",
+       width = 170, height = 170,
+       units = "mm", dpi = 600)
+```
