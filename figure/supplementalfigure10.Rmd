@@ -1,0 +1,462 @@
+---
+title: "supplementalfigure10"
+output: html_document
+date: "2026-06-04"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(tidyverse)
+library(patchwork)
+library(ggh4x)
+```
+
+Function to plot SBS96
+```{r}
+getSBSorder <- function() {
+    counter <- 1
+    df <- as.data.frame(matrix(data = NA, nrow = 96, ncol = 3))
+    all_bp <- c("A", "C", "G", "T")
+    pyr_muts <- c("C>A", "C>G", "C>T", "T>A", "T>C", "T>G")
+    for(m in pyr_muts){
+      for(a in all_bp){
+        for(b in all_bp){
+          df[counter,1] <- paste(a, "[",m, "]", b, sep="")
+          df[counter,2] <- m
+          df[counter,3] <- paste(a, substring(m,1,1),b, sep="")
+          counter <- counter + 1 ## Add counter for next row
+        }
+      }
+    }
+    return(df)
+  }
+
+sbs.df <- getSBSorder()
+
+mut.color <- c('deepskyblue','black','red','lightgrey','yellowgreen','pink')
+
+## Function to plot SBS96
+plotSBS <- function(df, x.label, y.label, alpha = 1, strip.color = "white", strip.size = 3.5) {
+  df.pd <- df %>% left_join(x = ., y = sbs.df, by = c("MutationType"="V1"))
+  df.pd$MutationType <- factor(x = df.pd$MutationType, levels = sbs.df$V1)
+
+  # anno <- df.pd %>% dplyr::filter(V2 == "T>G") %>%
+  #   mutate(x = Inf,
+  #          y = Inf,
+  #          label = paste0("Total: ", round(sum(df.pd$value), digits = 0))
+  #          )
+
+  p1 <- ggplot(data = df.pd, aes(x = MutationType, y = value/sum(value)*100)) +
+    geom_col(aes(fill = V2), alpha = alpha) +
+    theme_bw() +
+    guides(fill = "none") +
+    scale_fill_manual(values = mut.color) +
+    facet_wrap2(.~V2, nrow = 1, scale = "free_x", drop = TRUE,
+                strip = strip_themed(
+                background_x = list(
+                  element_rect(fill = mut.color[1], color = "transparent"),
+                  element_rect(fill = mut.color[2], color = "transparent"),
+                  element_rect(fill = mut.color[3], color = "transparent"),
+                  element_rect(fill = mut.color[4], color = "transparent"),
+                  element_rect(fill = mut.color[5], color = "transparent"),
+                  element_rect(fill = mut.color[6], color = "transparent")
+                  ),
+                text_x = list(
+                  element_text(color = strip.color, face = "bold", size = strip.size, margin = margin(1, 1, 1, 1))
+                  )
+                )) +
+    # geom_text(data = anno, aes(x = x, y = y, label = label), inherit.aes = FALSE, size = 2.4,
+    #           vjust = 1.1,
+    #           hjust = 1.1) +
+    scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
+    scale_x_discrete(labels = setNames(sbs.df$V3, sbs.df$V1)) +
+    coord_cartesian(clip = "off") +
+    ylab(y.label) + xlab(x.label) +
+    theme(panel.border = element_blank(),
+          strip.background = element_blank(),
+          panel.spacing = unit(0, "lines"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 3),
+          axis.ticks.x = element_blank(),
+          axis.text.y = element_text(size = 6),
+          axis.title.y = element_text(size = 8),
+          axis.title.x = element_text(size = 8))
+}
+
+## Function to plot SBS96
+plotSBSnostrip <- function(df, x.label, y.label, alpha = 1, strip.color = "white", strip.size = 3.5) {
+  df.pd <- df %>% left_join(x = ., y = sbs.df, by = c("MutationType"="V1"))
+  df.pd$MutationType <- factor(x = df.pd$MutationType, levels = sbs.df$V1)
+
+  # anno <- df.pd %>% dplyr::filter(V2 == "T>G") %>%
+  #   mutate(x = Inf,
+  #          y = Inf,
+  #          label = paste0("Total: ", round(sum(df.pd$value), digits = 0))
+  #          )
+
+  p1 <- ggplot(data = df.pd, aes(x = MutationType, y = value/sum(value)*100)) +
+    geom_col(aes(fill = V2), alpha = alpha) +
+    theme_bw() +
+    guides(fill = "none") +
+    scale_fill_manual(values = mut.color) +
+    facet_wrap2(.~V2, nrow = 1, scale = "free_x", drop = TRUE,
+                strip = strip_themed(
+                background_x = list(
+                  element_blank(), element_blank(), element_blank(), element_blank(), element_blank(), element_blank()
+                  ),
+                text_x = list(
+                  element_text(color = strip.color, face = "bold", size = strip.size, margin = margin(1, 1, 1, 1))
+                  )
+                )) +
+    # geom_text(data = anno, aes(x = x, y = y, label = label), inherit.aes = FALSE, size = 2.4,
+    #           vjust = 1.1,
+    #           hjust = 1.1) +
+    scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
+    scale_x_discrete(labels = setNames(sbs.df$V3, sbs.df$V1)) +
+    coord_cartesian(clip = "off") +
+    ylab(y.label) + xlab(x.label) +
+    theme(panel.border = element_blank(),
+          strip.background = element_blank(),
+          panel.spacing = unit(0, "lines"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 3),
+          axis.ticks.x = element_blank(),
+          axis.text.y = element_text(size = 6),
+          axis.title.y = element_text(size = 8),
+          axis.title.x = element_text(size = 8))
+}
+```
+
+Load and prepare data for plotting SBS96
+```{r}
+## Load SigRescueR result
+load("/mnt/data1/peter/repo/AAmanu/data/SigRescueR/wga_bloodfraction_sr_wga.rda")
+SigRescueR::SigRescueAnalyze(res = res)
+
+pd <- samp.cleaned %>% 'colnames<-' (gsub(pattern = "PBMC::", replacement = "", x = names(.))) ## clean up name
+
+pd.meta <- data.frame(sample = names(pd)[-1]) %>%
+  separate(sample, c("group", "type", "batch"), sep = "_", remove = FALSE) %>% ## split sample name into group, type and batch
+  mutate(type = ifelse(type == "myeloid", "Myeloid", type))
+```
+
+Plot SBS96 for each sample. Hardcoded. 
+```{r}
+## UC4
+p1 <- plotSBS(df = data.frame(MutationType = pd$MutationType, 
+                              value = pd$`UC4_B-cell_2`), 
+              x.label = NULL, y.label = "UC4 B-cell 2", strip.size = 4) +
+  theme(
+        axis.text.x = element_text(size = 1.5),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_text(size = 5),
+        axis.ticks.y = element_blank())
+
+p2 <- plotSBS(df = data.frame(MutationType = pd$MutationType, 
+                              value = pd$`UC4_T-cell_1`), 
+              x.label = NULL, y.label = "UC4 T-cell 1", strip.size = 4) +
+  theme(
+        axis.text.x = element_text(size = 1.5),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_text(size = 5),
+        axis.ticks.y = element_blank())
+
+p3 <- plotSBS(df = data.frame(MutationType = pd$MutationType, 
+                              value = pd$`UC4_NK-cell_1`), 
+              x.label = NULL, y.label = "UC4 NK-cell 1", strip.size = 4) +
+  theme(
+        axis.text.x = element_text(size = 1.5),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_text(size = 5),
+        axis.ticks.y = element_blank())
+
+p4 <- plotSBS(df = data.frame(MutationType = pd$MutationType, 
+                              value = pd$UC4_Myeloid_1), 
+              x.label = NULL, y.label = "UC4 Myeloid 1", strip.size = 4) +
+  theme(
+        axis.text.x = element_text(size = 1.5),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_text(size = 5),
+        axis.ticks.y = element_blank())
+
+## UC5
+p5 <- plotSBS(df = data.frame(MutationType = pd$MutationType, 
+                              value = pd$UC5_Myeloid_2), 
+              x.label = NULL, y.label = "UC5 Myeloid 2", strip.size = 4) +
+  theme(
+        axis.text.x = element_text(size = 1.5),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_text(size = 5),
+        axis.ticks.y = element_blank()) 
+
+## UC7
+p6 <- plotSBS(df = data.frame(MutationType = pd$MutationType, 
+                              value = pd$`UC7_B-cell_2`), 
+              x.label = NULL, y.label = "UC7 B-cell 2", strip.size = 4) +
+  theme(
+        axis.text.x = element_text(size = 1.5),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_text(size = 5),
+        axis.ticks.y = element_blank())
+
+p7 <- plotSBS(df = data.frame(MutationType = pd$MutationType, 
+                              value = pd$`UC7_T-cell_1`), 
+              x.label = NULL, y.label = "UC7 T-cell 1", strip.size = 4) +
+  theme(
+        axis.text.x = element_text(size = 1.5),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_text(size = 5),
+        axis.ticks.y = element_blank())
+
+p8 <- plotSBS(df = data.frame(MutationType = pd$MutationType, 
+                              value = pd$`UC7_T-cell_3`), 
+              x.label = NULL, y.label = "UC7 T-cell 3", strip.size = 4) +
+  theme(
+        axis.text.x = element_text(size = 1.5),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_text(size = 5),
+        axis.ticks.y = element_blank())
+
+p9 <- plotSBS(df = data.frame(MutationType = pd$MutationType, 
+                              value = pd$`UC7_NK-cell_1`), 
+              x.label = NULL, y.label = "UC7 NK-cell 1", strip.size = 4) +
+  theme(
+        axis.text.x = element_text(size = 1.5),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_text(size = 5),
+        axis.ticks.y = element_blank())
+
+p10 <- plotSBS(df = data.frame(MutationType = pd$MutationType, 
+                              value = pd$`UC7_NK-cell_3`), 
+              x.label = NULL, y.label = "UC7 NK-cell 3", strip.size = 4) +
+  theme(
+        axis.text.x = element_text(size = 1.5),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_text(size = 5),
+        axis.ticks.y = element_blank())
+
+## UC14
+p11 <- plotSBS(df = data.frame(MutationType = pd$MutationType, 
+                              value = pd$`UC14_B-cell_5`), 
+              x.label = NULL, y.label = "UC14 B-cell 5", strip.size = 4) +
+  theme(
+        axis.text.x = element_text(size = 1.5),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_text(size = 5),
+        axis.ticks.y = element_blank())
+
+p12 <- plotSBS(df = data.frame(MutationType = pd$MutationType, 
+                              value = pd$`UC14_T-cell_4`), 
+              x.label = NULL, y.label = "UC14 T-cell 4", strip.size = 4) +
+  theme(
+        axis.text.x = element_text(size = 1.5),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_text(size = 5),
+        axis.ticks.y = element_blank())
+
+p13 <- plotSBS(df = data.frame(MutationType = pd$MutationType, 
+                              value = pd$`UC14_T-cell_4b`), 
+              x.label = NULL, y.label = "UC14 T-cell 4b", strip.size = 4) +
+  theme(
+        axis.text.x = element_text(size = 1.5),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_text(size = 5),
+        axis.ticks.y = element_blank())
+
+p14 <- plotSBS(df = data.frame(MutationType = pd$MutationType, 
+                              value = pd$`UC14_T-cell_6`), 
+              x.label = NULL, y.label = "UC14 T-cell 6", strip.size = 4) +
+  theme(
+        axis.text.x = element_text(size = 1.5),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_text(size = 5),
+        axis.ticks.y = element_blank())
+
+p15 <- plotSBS(df = data.frame(MutationType = pd$MutationType, 
+                              value = pd$`UC14_T-cell_7`), 
+              x.label = NULL, y.label = "UC14 T-cell 7", strip.size = 4) +
+  theme(
+        axis.text.x = element_text(size = 1.5),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_text(size = 5),
+        axis.ticks.y = element_blank())
+
+p16 <- plotSBS(df = data.frame(MutationType = pd$MutationType, 
+                              value = pd$UC14_Myeloid_2), 
+              x.label = NULL, y.label = "UC14 Myeloid 2", strip.size = 4) +
+  theme(
+        axis.text.x = element_text(size = 1.5),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_text(size = 5),
+        axis.ticks.y = element_blank())
+
+## UC14 T cell 7 was basically background. 
+
+## UC18
+p17 <- plotSBS(df = data.frame(MutationType = pd$MutationType, 
+                              value = pd$`UC18_B-cell_1`), 
+              x.label = NULL, y.label = "UC18 B-cell 1", strip.size = 4) +
+  theme(
+        axis.text.x = element_text(size = 1.5),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_text(size = 5),
+        axis.ticks.y = element_blank())
+
+p18 <- plotSBS(df = data.frame(MutationType = pd$MutationType, 
+                              value = pd$`UC18_T-cell_1`), 
+              x.label = NULL, y.label = "UC18 T-cell 1", strip.size = 4) +
+  theme(
+        axis.text.x = element_text(size = 1.5),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_text(size = 5),
+        axis.ticks.y = element_blank())
+
+p19 <- plotSBS(df = data.frame(MutationType = pd$MutationType, 
+                              value = pd$`UC18_T-cell_2`), 
+              x.label = NULL, y.label = "UC18 T-cell 2", strip.size = 4) +
+  theme(
+        axis.text.x = element_text(size = 1.5),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_text(size = 5),
+        axis.ticks.y = element_blank())
+
+p20 <- plotSBS(df = data.frame(MutationType = pd$MutationType, 
+                              value = pd$`UC18_NK-cell_1`), 
+              x.label = NULL, y.label = "UC18 NK-cell 1", strip.size = 4) +
+  theme(
+        axis.text.x = element_text(size = 1.5),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_text(size = 5),
+        axis.ticks.y = element_blank())
+
+p21 <- plotSBS(df = data.frame(MutationType = pd$MutationType, 
+                              value = pd$`UC18_NK-cell_2`), 
+              x.label = NULL, y.label = "UC18 NK-cell 2", strip.size = 4) +
+  theme(
+        axis.text.x = element_text(size = 1.5),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_text(size = 5),
+        axis.ticks.y = element_blank())
+
+p22 <- plotSBS(df = data.frame(MutationType = pd$MutationType, 
+                              value = pd$UC18_myeloid_1), 
+              x.label = NULL, y.label = "UC18 Myeloid 1", strip.size = 4) +
+  theme(
+        axis.text.x = element_text(size = 1.5),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_text(size = 5),
+        axis.ticks.y = element_blank())
+
+## UC34 
+p23 <- plotSBS(df = data.frame(MutationType = pd$MutationType, 
+                              value = pd$`UC34_B-cell_1`), 
+              x.label = NULL, y.label = "UC34 B-cell 1", strip.size = 4) +
+  theme(
+        axis.text.x = element_text(size = 1.5),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_text(size = 5),
+        axis.ticks.y = element_blank())
+
+p24 <- plotSBS(df = data.frame(MutationType = pd$MutationType, 
+                              value = pd$`UC34_T-cell_1`), 
+              x.label = NULL, y.label = "UC34 T-cell 1", strip.size = 4) +
+  theme(
+        axis.text.x = element_text(size = 1.5),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_text(size = 5),
+        axis.ticks.y = element_blank())
+
+p25 <- plotSBS(df = data.frame(MutationType = pd$MutationType, 
+                              value = pd$`UC34_T-cell_2`), 
+              x.label = NULL, y.label = "UC34 T-cell 2", strip.size = 4) +
+  theme(
+        axis.text.x = element_text(size = 1.5),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_text(size = 5),
+        axis.ticks.y = element_blank())
+
+p26 <- plotSBS(df = data.frame(MutationType = pd$MutationType, 
+                              value = pd$`UC34_NK-cell_2`), 
+              x.label = NULL, y.label = "UC34 NK-cell 2", strip.size = 4) +
+  theme(
+        axis.text.x = element_text(size = 1.5),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_text(size = 5),
+        axis.ticks.y = element_blank())
+
+p27 <- plotSBS(df = data.frame(MutationType = pd$MutationType, 
+                              value = pd$UC34_myeloid_1), 
+              x.label = NULL, y.label = "UC34 Myeloid 1", strip.size = 4) +
+  theme(
+        axis.text.x = element_text(size = 1.5),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_text(size = 5),
+        axis.ticks.y = element_blank())
+```
+
+```{r}
+combined_plot1 <- (p1 + p2 + p3) / (p4 + p5 + p6) / (p7 + p8 + p9) / (p10 + p11 + p12) / (p13 + p14 + p16) / (p17 + p18 + p19) / (p20 + p21 + p22) / (p23 + p24 + p25) / (p16 + p27 + plot_spacer()) +  
+  plot_layout(widths = c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1))
+
+ggsave("/mnt/data1/peter/repo/AAmanu/figure/supplementalfigure10.png", 
+       width = 170, height = 150,
+       units = "mm", dpi = 600)
+```
+
