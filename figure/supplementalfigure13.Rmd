@@ -1,0 +1,190 @@
+---
+title: "supplementalfigure13"
+output: html_document
+date: "2026-04-27"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(tidyverse)
+library(patchwork)
+```
+
+Comparing variants in DS PBMC with DS sorted immune
+```{r}
+## Sorted immune cell VCF for UC7
+## bcell
+uc7b <- data.table::fread("/mnt/storage/peter/steve_aa/AA_normal_blood_tumors_DS_WGS_singleCells_SteveRozen_Arnoud/TwinstrandDraft/Supplementary/Supplemental_code/sorted_immune/input_data/vcfs_bloodFractions_batch1/UC7_B-cell.1.consensus.variant-calls.vcf.gz", skip = "#CHROM") %>% as.data.frame() %>%
+  .[,c(1,2,4,5)]
+## nkcell
+uc7nk <- data.table::fread("/mnt/storage/peter/steve_aa/AA_normal_blood_tumors_DS_WGS_singleCells_SteveRozen_Arnoud/TwinstrandDraft/Supplementary/Supplemental_code/sorted_immune/input_data/vcfs_bloodFractions_batch1/UC7_NK-cell.1.consensus.variant-calls.vcf.gz", skip = "#CHROM") %>% as.data.frame() %>%
+  .[,c(1,2,4,5)]
+## tcell
+uc7t <- data.table::fread("/mnt/storage/peter/steve_aa/AA_normal_blood_tumors_DS_WGS_singleCells_SteveRozen_Arnoud/TwinstrandDraft/Supplementary/Supplemental_code/sorted_immune/input_data/vcfs_bloodFractions_batch1/UC7_T-cell.1.consensus.variant-calls.vcf.gz", skip = "#CHROM") %>% as.data.frame() %>%
+  .[,c(1,2,4,5)]
+
+## Combine together
+uc7_sorted <- rbind(uc7b, uc7nk, uc7t) %>% distinct()
+
+## Sorted immune cell VCF for UC14
+## bcell
+uc14b <- data.table::fread("/mnt/storage/peter/steve_aa/AA_normal_blood_tumors_DS_WGS_singleCells_SteveRozen_Arnoud/TwinstrandDraft/Supplementary/Supplemental_code/sorted_immune/input_data/vcfs_bloodFractions_batch1/UC14_B-cell.1.consensus.variant-calls.vcf.gz", skip = "#CHROM") %>% as.data.frame() %>%
+  .[,c(1,2,4,5)]
+## nkcell
+uc14nk <- data.table::fread("/mnt/storage/peter/steve_aa/AA_normal_blood_tumors_DS_WGS_singleCells_SteveRozen_Arnoud/TwinstrandDraft/Supplementary/Supplemental_code/sorted_immune/input_data/vcfs_bloodFractions_batch1/UC14_NK-cell.1.consensus.variant-calls.vcf.gz", skip = "#CHROM") %>% as.data.frame() %>%
+  .[,c(1,2,4,5)]
+
+## Combine together
+uc14_sorted <- rbind(uc14b, uc14nk) %>% distinct()
+
+## PBMC (unsorted DS)
+ds_uc7b <- data.table::fread("/mnt/data1/peter/repo/AAmanu/data/matGen/ds_filtered/input/UC7_Blood.vcf", skip = "#CHROM") %>% 
+  as.data.frame() %>% .[,c(1,2,4,5)] %>% mutate(status = 1, `#CHROM` = paste0("chr", `#CHROM`))
+ds_uc14b <- data.table::fread("/mnt/data1/peter/repo/AAmanu/data/matGen/ds_filtered/input/UC14_Blood.vcf", skip = "#CHROM") %>% 
+  as.data.frame() %>% .[,c(1,2,4,5)] %>% mutate(status = 1, `#CHROM` = paste0("chr", `#CHROM`))
+
+## Filtered germline vcf for duplex sequenced samples
+allMuts <- data.table::fread("/mnt/data1/peter/repo/AAmanu/data/vcf_ds_cleaned.txt") %>% as.data.frame() %>%
+  dplyr::filter(sample %in% c("UC7_Blood", "UC14_Blood")) %>%
+  mutate(POS = POS + 1,
+         status = 1)
+
+
+ds_uc7b <- allMuts %>% dplyr::filter(sample == "UC7_Blood")
+ds_uc14b <- allMuts %>% dplyr::filter(sample == "UC14_Blood")
+
+#####################
+## intext analysis ##
+
+## How many DS unsorted mutations are found in the sorted immune cells?
+## UC7
+match_uc7 <- uc7_sorted %>% left_join(x = ., y = ds_uc7b, by = c("#CHROM"="CHROM", "POS", "REF", "ALT"))
+table(match_uc7$status, useNA = "always")
+88 / (88+1245) * 100
+## UC14
+match_uc14 <- uc14_sorted %>% left_join(x = ., y = ds_uc14b, by = c("#CHROM"="CHROM", "POS", "REF", "ALT"))
+table(match_uc14$status, useNA = "always")
+35 / (35+455) * 100
+
+
+## How many mutations found in both PBMC and sorted immune cells are clonal (read>1)?
+## UC7
+clonal_uc7 <- allMuts %>% dplyr::filter(group == "UC7")
+match_uc7_clonal <- clonal_uc7 %>% left_join(x = ., y = match_uc7, by = c("CHROM"="#CHROM", "POS", "REF", "ALT"))
+
+## In both? How many clonal?
+variant_detected_in_both <- match_uc7_clonal %>% dplyr::filter(status.y == 1)
+table(variant_detected_in_both$alt_depth.x>1)
+34/(54+34)*100
+## Exclusive to blood? How many clonal?
+variant_detected_in_unsorted <- match_uc7_clonal %>% dplyr::filter(is.na(status.y))
+table(variant_detected_in_unsorted$alt_depth.x>1)
+13/(327+13)*100
+
+## Create contig table for fishers test
+tab <- matrix(c(54, 34,
+                327,  13),
+              nrow = 2, byrow = TRUE,
+              dimnames = list(Group = c("YesSorted", "NoSorted"),
+                              Clonal = c("FALSE", "TRUE"))
+              )
+tab2 <- tab[c("NoSorted", "YesSorted"), ]
+fisher.test(tab2)
+
+## Do the same thing for UC14
+clonal_uc14 <- allMuts %>% dplyr::filter(group == "UC14")
+match_uc14_clonal <- clonal_uc14 %>% left_join(x = ., y = match_uc14, by = c("CHROM"="#CHROM", "POS", "REF", "ALT"))
+
+variant_detected_in_both <- match_uc14_clonal %>% dplyr::filter(status.y == 1)
+table(variant_detected_in_both$alt_depth.x>1)
+17/(18+17)*100
+variant_detected_in_unsorted <- match_uc14_clonal %>% dplyr::filter(is.na(status.y))
+table(variant_detected_in_unsorted$alt_depth.x>1)
+9/(273+9)*100
+
+tab <- matrix(c(18, 17,
+                273,  9),
+              nrow = 2, byrow = TRUE,
+              dimnames = list(Group = c("YesSorted", "NoSorted"),
+                              Clonal = c("FALSE", "TRUE"))
+              )
+tab2 <- tab[c("NoSorted", "YesSorted"), ]
+fisher.test(tab2)
+```
+
+Plotting results from previous chunk
+```{r}
+## Create plot data from the computed proportions in the previous chunk
+uc7.pd <- data.frame(Status = c("No", "Yes"),
+                     Clonal = c(3.823529, 38.63636),
+                     NonClonal = c(100-3.823529, 100-38.63636),
+                     group = "UC7")
+
+uc14.pd <- data.frame(Status = c("No", "Yes"),
+                     Clonal = c(3.191489, 48.57143),
+                     NonClonal = c(100-3.191489, 100-48.57143),
+                     group = "UC14")
+
+pd <- rbind(uc7.pd, uc14.pd) %>% gather(data = ., key = "type", value = "value", -Status, -group)
+
+pd$group <- factor(x = pd$group, levels = c("UC7", "UC14"))
+
+col_anno <- c("#FFA500", "#7F7F7F")
+names(col_anno) <- c("Clonal", "NonClonal")
+
+p2 <-ggplot(data = pd, aes(x = Status, y = value, fill = type)) + 
+  geom_bar(position = "stack", stat = "identity", width = 0.8) +
+  scale_fill_manual(values = col_anno,
+                    name = "Clonal in original (unsorted)\nDS experiment") +
+  ylab("Proportion") + xlab("Variant detected in sorted\nimmune cell populations") +
+  facet_grid2(. ~ group, scales = "free", space = "free",
+              strip = strip_themed(
+              text_x = list(
+                element_text(color = "black", face = "bold", size = 6, margin = margin(0, 0, 0, 0))
+              ))) +
+  theme_bw() +
+  guides(fill = guide_legend(nrow = 2)) +
+  theme(axis.text.x = element_text(size = 6),
+        axis.text.y = element_text(size = 6),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.title.x = element_text(size = 6),
+        strip.text = element_text(size = 5),
+        panel.spacing = unit(0, "lines"),
+        panel.border = element_blank(),
+        panel.background = element_rect(fill = "white"),
+        strip.background = element_blank(),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        axis.line.y = element_line(color = "black", linewidth = 0.3),
+        axis.line.x = element_blank(),
+        plot.margin = margin(0,0,0,0),
+        legend.title = element_text(size = 6),
+        legend.text = element_text(size = 5),
+        legend.key.size = unit(0.25, "cm"),
+        legend.box.spacing = unit(0, "pt"))
+```
+
+```{r}
+layout <- "
+AABBBBBB
+AABBBBBB
+YYYYYYYY
+YYYYYYYY
+YYYYYYYY
+YYYYYYYY
+YYYYYYYY
+YYYYYYYY"
+
+combined_plot1 <- p2 + plot_layout(design=layout) + 
+  plot_annotation(tag_levels = list(c(""))) &
+  theme(plot.tag = element_text(face = 'bold', size = 10),
+        text = element_text(family = "Arial"))
+
+ggsave("/mnt/data1/peter/repo/AAmanu/figure/supplementalfigure13.png", 
+       width = 170, height = 170,
+       units = "mm", dpi = 600)
+```

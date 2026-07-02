@@ -1,0 +1,312 @@
+---
+title: "supplementalfigure9"
+output: html_document
+date: "2026-04-27"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(tidyverse)
+library(patchwork)
+library(ggh4x)
+library(SigRescueR)
+library(mSigAct)
+```
+
+Function to plot SBS96
+```{r}
+## Get SBS order
+getSBSorder <- function() {
+  counter <- 1
+  df <- as.data.frame(matrix(data = NA, nrow = 96, ncol = 3))
+  all_bp <- c("A", "C", "G", "T")
+  pyr_muts <- c("C>A", "C>G", "C>T", "T>A", "T>C", "T>G")
+  for(m in pyr_muts){
+    for(a in all_bp){
+      for(b in all_bp){
+        df[counter,1] <- paste(a, "[",m, "]", b, sep="")
+        df[counter,2] <- m
+        df[counter,3] <- paste(a, substring(m,1,1),b, sep="")
+        counter <- counter + 1 ## Add counter for next row
+      }
+    }
+  }
+  return(df)
+}
+
+sbs.df <- getSBSorder()
+
+## Mutation context colors
+mut.color <- c('deepskyblue','black','red','lightgrey','yellowgreen','pink')
+
+## Function to plot SBS96
+plotSBS <- function(df, x.label, alpha = 1) {
+  df.pd <- df %>% left_join(x = ., y = sbs.df, by = c("MutationType"="V1"))
+  df.pd$MutationType <- factor(x = df.pd$MutationType, levels = sbs.df$V1)
+  
+  anno <- df.pd %>% dplyr::filter(V2 == "T>G") %>%
+    mutate(x = Inf,
+           y = Inf,
+           label = paste0("Total: ", round(sum(df.pd$value), digits = 0))
+           )
+  
+  p1 <- ggplot(data = df.pd, aes(x = MutationType, y = value/sum(value)*100)) +
+  geom_col(aes(fill = V2), alpha = alpha) +
+  theme_bw() +
+  guides(fill = "none") +
+  scale_fill_manual(values = mut.color) +
+  facet_wrap2(.~V2, nrow = 1, scale = "free_x", drop = TRUE,
+    strip = strip_themed(
+      background_x = list(
+        element_rect(fill = mut.color[1], color = "transparent"),
+        element_rect(fill = mut.color[2], color = "transparent"),
+        element_rect(fill = mut.color[3], color = "transparent"),
+        element_rect(fill = mut.color[4], color = "transparent"),
+        element_rect(fill = mut.color[5], color = "transparent"),
+        element_rect(fill = mut.color[6], color = "transparent")
+        ),
+      text_x = list(
+        element_text(color = "white", face = "bold", size = 6, margin = margin(1, 1, 1, 1))
+        )
+      )
+    ) +
+  geom_text(
+    data = anno,
+    aes(x = x, y = y, label = label),
+    inherit.aes = FALSE,
+    size = 2.4,
+    vjust = 1.1,
+    hjust = 1.1
+  ) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
+  scale_x_discrete(labels = setNames(sbs.df$V3, sbs.df$V1)) +
+  coord_cartesian(clip = "off") +
+  ylab("% SBS") + xlab(x.label) +
+  theme(panel.border = element_blank(),
+        strip.background = element_blank(),
+        panel.spacing = unit(0, "lines"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 2.5),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_text(size = 6),
+        axis.title.y = element_text(size = 8),
+        axis.title.x = element_text(size = 8))
+  
+  return(p1)
+}
+
+## Function to plot SBS96 with alphas
+plotSBS.multialpha <- function(df, x.label, alpha = 1) {
+  df.pd <- df %>% left_join(x = ., y = sbs.df, by = c("MutationType"="V1"))
+  df.pd$MutationType <- factor(x = df.pd$MutationType, levels = sbs.df$V1)
+  
+  anno <- df.pd %>% dplyr::filter(V2 == "T>G") %>%
+    mutate(x = Inf,
+           y = Inf,
+           label = paste0("Total: ", round(sum(df.pd$value), digits = 0))
+           )
+  
+  p1 <- ggplot(data = df.pd, aes(x = MutationType, y = value/sum(value)*100)) +
+  geom_col(aes(fill = V2, alpha = status)) +
+  theme_bw() +
+  guides(fill = "none") +
+  scale_fill_manual(values = mut.color) +
+  scale_alpha_manual(values = alpha) +
+  facet_wrap2(.~V2, nrow = 1, scale = "free_x", drop = TRUE,
+    strip = strip_themed(
+      background_x = list(
+        element_rect(fill = mut.color[1], color = "transparent"),
+        element_rect(fill = mut.color[2], color = "transparent"),
+        element_rect(fill = mut.color[3], color = "transparent"),
+        element_rect(fill = mut.color[4], color = "transparent"),
+        element_rect(fill = mut.color[5], color = "transparent"),
+        element_rect(fill = mut.color[6], color = "transparent")
+        ),
+      text_x = list(
+        element_text(color = "white", face = "bold", size = 6, margin = margin(1, 1, 1, 1))
+        )
+      )
+    ) +
+  geom_text(
+    data = anno,
+    aes(x = x, y = y, label = label),
+    inherit.aes = FALSE,
+    size = 2.4,
+    vjust = 1.1,
+    hjust = 1.1
+  ) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
+  scale_x_discrete(labels = setNames(sbs.df$V3, sbs.df$V1)) +
+  coord_cartesian(clip = "off") +
+  ylab("% SBS") + xlab(x.label) +
+  theme(panel.border = element_blank(),
+        strip.background = element_blank(),
+        panel.spacing = unit(0, "lines"),
+        legend.position = "none",
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 2.5),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_text(size = 6),
+        axis.title.y = element_text(size = 8),
+        axis.title.x = element_text(size = 8))
+  
+  return(p1)
+}
+```
+
+Load original WGA data and apply SigRescueR to clean WGA artifact
+```{r}
+wga <- data.table::fread("/mnt/data1/peter/repo/AAmanu/data/HDP_input_ImmuneCells.csv") %>% as.data.frame() %>%
+  dplyr::rename("MutationType"="Mutation type") %>%
+  mutate(MutationType = paste0(substring(Trinucleotide,1,1), "[",
+                               MutationType,
+                               "]", substring(Trinucleotide,3,3))) %>%
+  dplyr::select(-Trinucleotide)
+
+# write.table(wga, file = "/mnt/storage/peter/repo/manuAA/data/wga_uc_bloodfraction.txt",
+#             row.names = FALSE, quote = FALSE, sep = "\t")
+
+## Cleaned PBMC samples with WGA cell line data
+# Rscript /mnt/storage/peter/repo/manuAA/code/othercode/wga_bloodfraction_sr_wga.R
+
+load("/mnt/storage/peter/repo/manuAA/data/wga_bf_sr_wga/wga_bloodfraction_sr_wga.rda")
+SigRescueR::SigRescueAnalyze(res = res)
+```
+
+```{r}
+## Select specific sample (PBMC::UC18_T-cell_1)
+samp <- names(res)[11]
+## Get stan fit res
+fit <- res[[samp]]
+## extract posterior draws
+posterior <- rstan::extract(fit$fit) 
+
+## extract all theta
+all_theta <- as.data.frame(posterior$norm_theta_b) %>% ## background activity
+  mutate(norm_theta_t = posterior$norm_theta_t) %>% ## exposure activity
+  sweep(x = ., MARGIN = 1, STATS = rowSums(.), FUN = "/") %>% ## normalize
+  colMeans()
+
+## subset theta based on type (baseline vs treatment)
+theta_t <- all_theta[length(all_theta)]
+theta_b <- all_theta[-length(all_theta)]
+
+theta_b_ind <- theta_b ## store baseline activity for replicates
+
+## extract inferred exposure signautres
+s_t <- apply(posterior$s_t, 2, quantile, probs = 0.025) ## treatment-induced profile (latent), selected lower bound. less leaky.
+s_t <- s_t / sum(s_t) ## normalize 
+
+## Reconstruct Exposure    
+reconstruct_s_t <- (s_t * theta_t) * sum(fit$s_t)
+## Reconstruct background
+reconstruct_s_b <- sapply(1:length(theta_b), function(x) { 
+  (as.numeric(fit$s_b[,x]) * theta_b[x]) * sum(fit$s_t)
+  })
+
+## Sum all the background together to get one background profile
+if(ncol(reconstruct_s_b)>1) {
+  reconstruct_s_b <- rowSums(reconstruct_s_b)
+}
+
+## Generate reconstructed profile
+reconstructed <- reconstruct_s_t + reconstruct_s_b
+```
+
+```{r}
+## Uncleaned profile (Original)
+original.pd <- data.frame(MutationType = samp.cleaned$MutationType,
+                          value = fit$s_t)
+p1 <- plotSBS(df = original.pd, x.label = "Original") + theme(plot.margin = margin(0,0,0,0))
+
+## Latent st (Cleaned)
+reconstruct_s_t.pd <- data.frame(MutationType = samp.cleaned$MutationType,
+                                 value = as.numeric(reconstruct_s_t))
+
+p3 <- plotSBS(df = reconstruct_s_t.pd, x.label = "Cleaned", alpha = 1) + theme(plot.margin = margin(0,0,0,5))
+
+## Fixed sb (Baseline)
+reconstruct_s_b.pd <- data.frame(MutationType = samp.cleaned$MutationType,
+                                 value = as.numeric(reconstruct_s_b))
+
+p4 <- plotSBS(df = reconstruct_s_b.pd, x.label = "Background", alpha = 0.5) + theme(plot.margin = margin(0,0,0,5))
+
+## Reconstructed ( Cleaned + Baseline)
+rsb <- reconstruct_s_b.pd %>% mutate(status = "Background")
+rst <- reconstruct_s_t.pd %>% mutate(status = "Exposure")
+
+reconstructed.pd <- rbind(rsb, rst)
+reconstructed.pd$status <- factor(x = reconstructed.pd$status, levels = c("Background", "Exposure"))
+
+p2 <- plotSBS.multialpha(df = reconstructed.pd, x.label = "Reconstructed", alpha = c(0.5, 1)) + theme(plot.margin = margin(0,0,0,0))
+```
+
+```{r}
+## Process SigRescueR cleaned sample dataframe
+pd <- samp.res %>% mutate(sample = (gsub(pattern = "PBMC::", replacement = "", x = sample))) %>%
+  separate(sample, c("group", "type", "batch"), sep = "_", remove = FALSE) %>%
+  mutate(type = ifelse(type == "myeloid", "Myeloid", type))
+
+## Factor order
+pd$group <- factor(x = pd$group, levels = c("UC4", "UC5", "UC7", "UC14", "UC18", "UC19", "UC34"))
+
+## Color annotation
+color_anno <- c("#803E75", "#FF6800", "#A6BDD7", "#C10020", "#CEA262", "#007D34", "#00538A")
+names(color_anno) <- c("UC7", "UC14", "UC18", "UC19", "UC34", "UC4", "UC5")
+
+## Shape annotation
+pch_anno <- c(21, 22, 23, 24)
+names(pch_anno) <- c("T-cell", "Myeloid", "NK-cell", "B-cell")
+
+
+p8 <- ggplot(data = pd, aes(x = group, y = theta_b, shape = type, fill = group)) +
+  geom_jitter(width = 0.2, height = 0, size = 2) +
+  scale_shape_manual(values = pch_anno) +
+  scale_fill_manual(values = color_anno) +
+  guides(fill = "none") +
+  ylab("Background Activity") +
+  theme_bw() +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.text = element_text(size = 6),
+        legend.background = element_blank(),
+        legend.title = element_blank(),
+        legend.key.size = unit(0.3, "cm"),
+        legend.text = element_text(size = 5),
+        legend.position = c(1.05, 1),
+        legend.direction = "horizontal",
+        legend.justification = c(1, 0))
+
+mean(pd$theta_b)
+```
+
+
+```{r}
+layout <- "
+AAABBBEEE
+CCCDDDEEE
+ZZZZZZZZZ
+ZZZZZZZZZ
+ZZZZZZZZZ
+ZZZZZZZZZ
+ZZZZZZZZZ
+ZZZZZZZZZ
+ZZZZZZZZZ
+ZZZZZZZZZ"
+
+dev.off()
+
+set.seed(514)
+combined_plot1 <- p1 + p4 + p2 + p3 + p8 + plot_spacer() + plot_layout(design=layout) +
+  plot_annotation(tag_levels = list(c("A", "", "", "", "B", "C", "D", "E"))) &
+  theme(plot.tag = element_text(face = 'bold', size = 10),
+        text = element_text(family = "Arial")) 
+
+ggsave("/mnt/data1/peter/repo/AAmanu/figure/supplementalfigure9.png", 
+       width = 170, height = 170,
+       units = "mm", dpi = 600)
+```
+
