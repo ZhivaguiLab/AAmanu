@@ -1,0 +1,92 @@
+---
+title: "supplementalfigure7"
+output: html_document
+date: "2026-06-22"
+editor_options: 
+  chunk_output_type: console
+---
+
+Input information:
+- 100ng input DNA ( = 33,333 haploid genomes)
+- median coverage of 6620
+
+Function to perform hypergeometric distribution. Dhyper to calculate the probability of obtaining more than 1 supporting read, 2 read, 3 read, etc etc in the same varia t
+```{r}
+tmpfun<-function(ps=ps,ngDNA=ngDNA){ 
+  ncells<-round(ngDNA/0.003,0)
+  output<-NULL
+  for(p in ps){
+    tmp1<-1-sum(dhyper(x = c(0,1), m = round(ncells*p,0), n = round(ncells*(1-p),0), k = 6620)) ## more than 1 read
+    tmp2<-1-sum(dhyper(x = c(0,1,2), m = round(ncells*p,0), n = round(ncells*(1-p),0), k = 6620))
+    tmp3<-1-sum(dhyper(x = c(0,1,2,3), m = round(ncells*p,0), n = round(ncells*(1-p),0), k = 6620))
+    tmp4<-1-sum(dhyper(x = c(0,1,2,3,4), m = round(ncells*p,0), n = round(ncells*(1-p),0), k = 6620))
+    tmp5<-1-sum(dhyper(x = c(0,1,2,3,4,5), m = round(ncells*p,0), n = round(ncells*(1-p),0), k = 6620)) ## more than 5 read
+    tmp6<-1-sum(dhyper(x = c(0,1,2,3,4,5,6), m = round(ncells*p,0), n = round(ncells*(1-p),0), k = 6620))
+    tmp7<-1-sum(dhyper(x = c(0,1,2,3,4,5,6,7), m = round(ncells*p,0), n = round(ncells*(1-p),0), k = 6620))
+    tmp8<-1-sum(dhyper(x = c(0,1,2,3,4,5,6,7,8), m = round(ncells*p,0), n = round(ncells*(1-p),0), k = 6620))
+    tmp9<-1-sum(dhyper(x = c(0,1,2,3,4,5,6,7,8,9), m = round(ncells*p,0), n = round(ncells*(1-p),0), k = 6620))
+    tmp10<-1-sum(dhyper(x = c(0,1,2,3,4,5,6,7,8,9,10), m = round(ncells*p,0), n = round(ncells*(1-p)), k = 6620)) ## more than 10 read
+    
+    output<-rbind(output,c(proportion=p,moreThan1=tmp1,moreThan2=tmp2,
+                           moreThan3=tmp3,moreThan4=tmp4,
+                           moreThan5=tmp5,moreThan6=tmp6,
+                           moreThan7=tmp7,moreThan8=tmp8,
+                           moreThan9=tmp9,moreThan10=tmp10))
+    }
+  return(output)
+  }
+
+## Only going to analyze using 100ng DNA
+tmp <- tmpfun(ps=seq(0.000001,0.005,0.000001),ngDNA=100) ## From 0.000001 to 0.005 seq by 0.000001 (proportion of cells with mutation)
+
+## Process data for plotting
+tmp.pd <- tmp %>% as.data.frame() %>% 
+  gather(data = ., key = "alt", value = "probability", -proportion)
+
+## Color annotation
+cols<-c("black","grey10","grey20","grey30","grey40","grey50","grey60","grey70","grey80","grey90")
+names(cols) <- unique(tmp.pd$alt)
+
+## Factor order
+tmp.pd$alt <- factor(x = tmp.pd$alt, levels = unique(tmp.pd$alt))
+
+## Plot
+p1 <- ggplot(data = tmp.pd, aes(x = proportion, y = probability, group = alt, color = alt)) +
+  geom_line() +
+  scale_color_manual(values = cols) +
+  ylab("Probability") + xlab("Proportion Mutant Cells") +
+  theme_bw() +
+  theme(axis.text = element_text(size = 6),
+        axis.title = element_text(size = 8),
+        legend.title = element_blank(),
+        panel.grid = element_blank(),
+        legend.key.size = unit(0.2, "cm"),
+        legend.position = c(0.95, 0.2),
+        legend.justification = c(1, 0),
+        legend.background = element_blank(),
+        legend.text = element_text(size = 5))
+```
+
+```{r}
+layout <- "
+AAAABBBB
+AAAABBBB
+YYYYYYYY
+YYYYYYYY
+YYYYYYYY
+YYYYYYYY
+YYYYYYYY
+YYYYYYYY"
+
+set.seed(514)
+combined_plot1 <- p1 + plot_layout(design=layout) + 
+  plot_annotation(tag_levels = list(c(""))) &
+  theme(plot.tag = element_text(face = 'bold', size = 10),
+        text = element_text(family = "Arial"))
+
+ggsave("/mnt/data1/peter/repo/AAmanu/figure/supplementalfigure7.png", 
+       width = 170, height = 170,
+       units = "mm", dpi = 600)
+
+```
+

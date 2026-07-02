@@ -1,0 +1,216 @@
+---
+title: "supplemental figure 8"
+output: html_document
+date: "2026-06-05"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(tidyverse)
+library(ggvenn)
+library(patchwork)
+```
+
+```{r}
+## Code to filter germline mutations
+
+# manifest<-readxl::read_xlsx("/mnt/data1/peter/repo/AAmanu/data/2019-11-22_PRJ00046_Rozen_Aristolochic_Acid_In_Human_Cancer_Risk.xlsx", sheet = "Manifest")
+# manifest$`Client Sample Name`<-gsub("CGMH_AB","UC",manifest$`Client Sample Name`)
+# manifest$`Client Sample Name`<-gsub("PBMC","Blood",manifest$`Client Sample Name`)
+# manifest$`TwinStrand Sample ID`<-gsub(pattern = "\\..*", replacement = "", x = manifest$`TwinStrand Sample ID`)
+# 
+# allMuts <- data.table::fread("/mnt/storage/peter/steve_aa/vcfsTwinstrand/all.mut") %>% as.data.frame() %>%
+#   dplyr::rename("CHROM"="contig", "POS"="start", "REF"="ref", "ALT"="alt") %>%
+#   mutate(VAF = as.numeric(alt_depth)/as.numeric(depth)) %>%
+#   .[, c("CHROM","POS","REF","ALT","alt_depth","depth","VAF","variation_type","sample")] %>%
+#   left_join(x = ., y = manifest[, c("TwinStrand Sample ID", "Client Sample Name")], by = c("sample"="TwinStrand Sample ID"))
+# 
+# allMuts$sample <- allMuts$`Client Sample Name`
+# allMuts$`Client Sample Name` <- NULL
+# allMuts$ID <- paste0(allMuts$CHROM,":",allMuts$POS,"_",allMuts$REF,">",allMuts$ALT)
+# 
+# 
+# ## remove germline variants
+# ## germline variants are defined as variants with VAF > 10% in 2 samples of the same patient
+# germline <- list()
+# counter <- 1
+# for(smp in c(2,4,5,7,10,11,13,14,18,19,26,34)){
+#   tmp<-allMuts[grep(paste0("UC",smp,"N|UC",smp,"T|UC",smp,"_"),allMuts$sample),]
+#   tmp2<-tmp[tmp$VAF > 0.1,]
+#   tmp2<-as.data.frame(table(tmp2$ID))
+#   tmp3 <- tmp2 %>% dplyr::filter(Freq > 1)
+#   
+#   ## print out some stats
+#   print(paste0("Sample UC",smp))
+#   print(paste0("There are ",nrow(tmp2)," unique mutations that are detected with VAF > 10%"))
+#   print(paste0("Of these, ",sum(tmp2$Freq == length(unique(tmp$sample)))," are found with VAF > 10% in all samples"))
+#   
+#   germline[[counter]]<-data.frame(group = paste0("UC",smp),
+#                                   ID = unique(tmp3$Var1))
+#   counter <- counter + 1
+# }
+# 
+# germline <- as.data.frame(do.call(rbind, germline))
+# germline$status <- 1
+# 
+# allMuts2 <- allMuts %>% mutate(group = paste0("UC", as.numeric(str_extract(sample, "\\d+")))) %>%
+#   left_join(x = ., y = germline, by = c("group", "ID")) %>%
+#   dplyr::filter(is.na(status))
+# 
+# write.table(allMuts2, file = "/mnt/storage/peter/repo/manuAA/data/vcf_ds_cleaned.txt",
+#             row.names = F, quote = F, sep = "\t")
+
+## Load data
+allMuts <- data.table::fread("/mnt/data1/peter/repo/AAmanu/data/vcf_ds_cleaned.txt") %>% as.data.frame()
+
+###########################################
+## Process and plot figure by individual ##
+
+#########
+## UC7 ##
+all_res <- allMuts %>% dplyr::filter(grepl(pattern = "UC7", x = sample)) %>% 
+  mutate(type = case_when(grepl(pattern = "T", x = sample) ~ "Tumor",
+                          grepl(pattern = "N", x = sample) ~ "Normal",
+                          grepl(pattern = "Blood", x = sample) ~ "Blood",
+                          grepl(pattern = "Urine", x = sample) ~ "Urine"))
+all_res <-split(all_res$ID, all_res$type)
+
+p20 <- ggvenn(all_res, c("Tumor", "Normal", "Blood"), show_percentage = FALSE,
+              fill_color = c("#4F81BD", "#A6A6A6", "#D7191C"),
+              stroke_size = 0.5, set_name_size = 2.4, text_size = 1.8) +
+  coord_cartesian(clip = "off") +
+    ggtitle("UC7") +
+  theme(plot.title = element_text(size = 8, hjust = 0.5, face = "bold"),
+        plot.margin = margin(-10, -10, -10, -10, unit = "pt"))
+
+##########
+## UC14 ##
+all_res <- allMuts %>% dplyr::filter(grepl(pattern = "UC14", x = sample)) %>% 
+  mutate(type = case_when(grepl(pattern = "T", x = sample) ~ "Tumor",
+                          grepl(pattern = "N", x = sample) ~ "Normal",
+                          grepl(pattern = "Blood", x = sample) ~ "Blood",
+                          grepl(pattern = "Urine", x = sample) ~ "Urine"))
+all_res <-split(all_res$ID, all_res$type)
+
+p21 <- ggvenn(all_res, c("Tumor", "Normal", "Blood", "Urine"), show_percentage = FALSE,
+              fill_color = c("#4F81BD", "#A6A6A6", "#D7191C", "#FDAE61"),
+              stroke_size = 0.5, set_name_size = 2.4, text_size = 1.8) +
+  coord_cartesian(clip = "off") +
+    ggtitle("UC14") +
+  theme(plot.title = element_text(size = 8, hjust = 0.5, face = "bold"),
+        plot.margin = margin(0,0,0,0))
+
+##########
+## UC18 ##
+all_res <- allMuts %>% dplyr::filter(grepl(pattern = "UC18", x = sample)) %>% 
+  mutate(type = case_when(grepl(pattern = "T", x = sample) ~ "Tumor",
+                          grepl(pattern = "N", x = sample) ~ "Normal",
+                          grepl(pattern = "Blood", x = sample) ~ "Blood",
+                          grepl(pattern = "Urine", x = sample) ~ "Urine"))
+all_res <-split(all_res$ID, all_res$type)
+
+p22 <- ggvenn(all_res, c("Tumor", "Normal", "Blood", "Urine"), show_percentage = FALSE,
+              fill_color = c("#4F81BD", "#A6A6A6", "#D7191C", "#FDAE61"),
+              stroke_size = 0.5, set_name_size = 2.4, text_size = 1.8) +
+  coord_cartesian(clip = "off") +
+    ggtitle("UC18") +
+  theme(plot.title = element_text(size = 8, hjust = 0.5, face = "bold"),
+        plot.margin = margin(0,0,0,0))
+
+##########
+## UC19 ##
+all_res <- allMuts %>% dplyr::filter(grepl(pattern = "UC19", x = sample)) %>% 
+  mutate(type = case_when(grepl(pattern = "T", x = sample) ~ "Tumor",
+                          grepl(pattern = "N", x = sample) ~ "Normal",
+                          grepl(pattern = "Blood", x = sample) ~ "Blood",
+                          grepl(pattern = "Urine", x = sample) ~ "Urine"))
+all_res <-split(all_res$ID, all_res$type)
+
+p23 <- ggvenn(all_res, c("Tumor", "Normal", "Blood", "Urine"), show_percentage = FALSE,
+              fill_color = c("#4F81BD", "#A6A6A6", "#D7191C", "#FDAE61"),
+              stroke_size = 0.5, set_name_size = 2.4, text_size = 1.8) +
+  coord_cartesian(clip = "off") +
+    ggtitle("UC19") +
+  theme(plot.title = element_text(size = 8, hjust = 0.5, face = "bold"),
+        plot.margin = margin(0,0,0,0))
+
+##########
+## UC34 ##
+all_res <- allMuts %>% dplyr::filter(grepl(pattern = "UC34", x = sample)) %>% 
+  mutate(type = case_when(grepl(pattern = "T", x = sample) ~ "Tumor",
+                          grepl(pattern = "N", x = sample) ~ "Normal",
+                          grepl(pattern = "Blood", x = sample) ~ "Blood",
+                          grepl(pattern = "Urine", x = sample) ~ "Urine"))
+all_res <-split(all_res$ID, all_res$type)
+
+p24 <- ggvenn(all_res, c("Tumor", "Normal", "Blood"), show_percentage = FALSE,
+              fill_color = c("#4F81BD", "#A6A6A6", "#D7191C", "#FDAE61"),
+              stroke_size = 0.5, set_name_size = 2.4, text_size = 1.8) +
+  coord_cartesian(clip = "off") +
+  ggtitle("UC34") +
+  theme(plot.title = element_text(size = 8, hjust = 0.5, face = "bold"),
+        plot.margin = margin(0,0,0,0))
+```
+
+Are variants in blood found in other tissues clonal? (intext analysis)
+```{r}
+allMuts_summary  <- allMuts %>% mutate(sample = case_when(grepl(pattern = "T", x = sample) ~ "T",
+                                                  grepl(pattern = "N", x = sample) ~ "N",
+                                                  grepl(pattern = "Blood", x = sample) ~ "B",
+                                                  grepl(pattern = "Urine", x = sample) ~ "U")) %>%
+  distinct(group, sample, ID) %>%
+  group_by(group, ID) %>%
+  summarise(
+    n_samples = n(), ## tally sample with variant
+    samples = paste(sort(sample), collapse = ","), ## which sample type has it
+    .groups = "drop"
+  ) 
+
+## Select for varaints that are clonal (read>1)
+blood_variants_found <- allMuts_summary %>% dplyr::filter(n_samples > 1,
+                                                           grepl(pattern = "B", x = samples))
+## Table to get raw count
+table(blood_variants_found$group)
+
+## Append the blood_variants_found to allMuts to get read depth
+filtered_allMuts <- allMuts %>% dplyr::filter(grepl(pattern = "Blood", x = sample)) %>%
+  left_join(x = ., y = blood_variants_found, by = c("group", "ID")) %>%
+  dplyr::filter(!is.na(n_samples))
+
+## Manual calculate proportion
+# variants that were detected in both blood as well as any other sample of the same patient were clonal in the blood
+table(filtered_allMuts$alt_depth > 1)
+55/(66+55)
+
+# variants in blood were clonal
+all_blood <- allMuts %>% dplyr::filter(grepl(pattern = "Blood", x = sample))
+table(all_blood$alt_depth > 1)
+183/(183+1416)
+```
+
+```{r}
+layout <- "
+AAAAAAAA
+AAAAAAAA
+ZZZZZZZZ
+ZZZZZZZZ
+ZZZZZZZZ
+ZZZZZZZZ
+ZZZZZZZZ
+ZZZZZZZZ
+ZZZZZZZZ"
+
+combined_venn <- p20 + p21 + p22 + p23 + p24 + plot_layout(widths = c(0.7, 1, 1, 1, 0.7))
+
+
+set.seed(602)
+combined_plot1 <- wrap_elements(combined_venn) + plot_layout(design=layout) + 
+  plot_annotation(tag_levels = list(c(""))) &
+  theme(plot.tag = element_text(face = 'bold', size = 10),
+        text = element_text(family = "Arial"))
+
+ggsave("/mnt/data1/peter/repo/AAmanu/figure/supplementalfigure8.png", 
+       width = 170, height = 170,
+       units = "mm", dpi = 600)
+```
