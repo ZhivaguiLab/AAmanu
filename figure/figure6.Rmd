@@ -214,12 +214,23 @@ plot_df$Signatures <- factor(x = plot_df$Signatures,
 
 plot_df$Batch <- factor(x = plot_df$Batch, levels = c("B-cell", "T-cell", "NK-cell", "Myeloid"))
 
+pval_df <- plot_df %>% dplyr::filter(FDR < 0.05) %>%
+  mutate(x = Inf,
+         label = paste0("p =", signif(FDR, digits = 2)))
+
 p1 <- ggplot(plot_df, aes(x = OR_plot, y = Signatures)) +
   geom_errorbarh(aes(xmin = lower_CI,
                      xmax = upper_plot),
                  height = 0.2,
                  linewidth = 0.25) +
   geom_point(size = 0.5) +
+  geom_text(
+    data = pval_df,
+    aes(x = Inf, y = Signatures, label = label),
+    inherit.aes = FALSE,
+    vjust = 2.5, hjust = 1.5,
+    size = 1.6
+  ) +
   facet_wrap(.~Batch) +
   scale_x_log10(breaks = 10^(-4:4), labels = -4:4) +
   geom_vline(xintercept = 1, linetype = 2, colour = "grey50", linewidth = 0.25) +
@@ -244,6 +255,7 @@ p1 <- ggplot(plot_df, aes(x = OR_plot, y = Signatures)) +
         strip.background = element_blank(),
         strip.text = element_text(size = 8, margin = margin(0,0,0,0)),
         plot.margin = margin(0,0,0,0))
+p1
 ```
 
 Panel C: Complement scWGS with DS
@@ -280,6 +292,7 @@ names(shape_anno) <- c("Positive", "Negative")
 p4 <- ggplot(data = scWGS_sbs22, aes(x = celltype, y = value)) +
   geom_boxplot(outlier.shape = NA,   fill = "grey85", color = "grey70", linewidth = 0.4, alpha = 0.3) +
   geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.25) +
+  geom_quasirandom(width = 0.18, size = 1, color = "grey70", alpha = 0.3) +
   geom_point(data = ds_sbs22, aes(x = type, y = value, color = group, shape = status),
     size = 1,
     position = position_jitter(width = 0.12)
