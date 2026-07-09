@@ -10,6 +10,7 @@ editor_options:
 library(tidyverse)
 library(mSigAct)
 library(patchwork)
+library(ggh4x)
 ```
 
 ## Run mSigAct on clonal and nonclonal
@@ -174,38 +175,22 @@ names(color_anno) <- c("N", "T", "B", "U")
 ##############
 ## plotting ##
 
-## Clonal and SBS22a attribution
-p10 <- ggplot(data = combined_all_clonal %>% dplyr::filter(Mutation == "Clonal"), aes(x = type, y = value)) +
+p10 <- ggplot(data = combined_all_clonal, aes(x = type, y = value)) +
   geom_boxplot(outlier.shape = NA, alpha = 0.5, aes(fill = type)) +
   geom_jitter(width = 0.15, size = 0.5, color = "black", shape = 21) +
+  facet_wrap(.~Mutation) +
   scale_y_continuous(limits = c(-0.05, 1.05),
                      breaks = seq(0, 1, by = 0.25)) +
-  ylab("SBS22a Attribution") + ggtitle("Clonal") +
+  ylab("SBS22a Attribution") +
   scale_fill_manual(values = color_anno) +
   theme_bw() +
   theme(axis.title.x = element_blank(),
         axis.title.y = element_text(size = 8),
         axis.text = element_text(size = 6),
-        plot.title = element_text(size = 8, hjust = 0.5, margin = margin(b=0)),
         panel.grid = element_blank(),
         plot.margin = margin(0,5,0,0),
-        legend.position = "none")
-
-## NonClonal and SBS22a attribution
-p100 <- ggplot(data = combined_all_clonal %>% dplyr::filter(Mutation == "NonClonal"), aes(x = type, y = value)) +
-  geom_boxplot(outlier.shape = NA, alpha = 0.5, aes(fill = type)) +
-  geom_jitter(width = 0.15, size = 0.5, color = "black", shape = 21) +
-  scale_y_continuous(limits = c(-0.05, 1.05),
-                     breaks = seq(0, 1, by = 0.25)) +
-  ylab("SBS22a Attribution") + ggtitle("NonClonal") +
-  scale_fill_manual(values = color_anno) +
-  theme_bw() +
-  theme(axis.title.x = element_blank(),
-        axis.title.y = element_text(size = 8),
-        axis.text = element_text(size = 6),
-        plot.title = element_text(size = 8, hjust = 0.5, margin = margin(b=0)),
-        panel.grid = element_blank(),
-        plot.margin = margin(0,5,0,0),
+        strip.text = element_text(size = 8, margin = margin(b=0)),
+        strip.background = element_blank(),
         legend.position = "none")
 
 ## Correlation analysis
@@ -257,41 +242,27 @@ combined_all_clonal <- ds_nonclonal %>% left_join(x = ., y = ds_clonal, by = "Sa
 combined_all_clonal$Mutation <- factor(x = combined_all_clonal$Mutation, levels = c("NonClonal", "Clonal"))
 combined_all_clonal$type <- factor(x = combined_all_clonal$type, levels = c("T", "N","B", "U"))
 
-p11 <- ggplot(data = combined_all_clonal %>% dplyr::filter(Mutation == "Clonal"), aes(x = type, y = value)) +
+p11 <- ggplot(data = combined_all_clonal, aes(x = type, y = value)) +
   geom_boxplot(outlier.shape = NA, alpha = 0.5, aes(fill = type)) +
   geom_jitter(width = 0.15, size = 0.5, color = "black", shape = 21) +
+  facet_wrap(.~Mutation) +
   scale_y_continuous(limits = c(-0.05, 1.05),
                      breaks = seq(0, 1, by = 0.25)) +
-  ylab("Aging Attribution") + ggtitle("Clonal") +
+  ylab("Aging Attribution") +
   scale_fill_manual(values = color_anno) +
   theme_bw() +
   theme(axis.title.x = element_blank(),
         axis.title.y = element_text(size = 8),
         axis.text = element_text(size = 6),
-        plot.title = element_text(size = 8, hjust = 0.5, margin = margin(b=0)),
         panel.grid = element_blank(),
         plot.margin = margin(0,5,0,0),
-        legend.position = "none")
-
-p110 <- ggplot(data = combined_all_clonal %>% dplyr::filter(Mutation == "NonClonal"), aes(x = type, y = value)) +
-  geom_boxplot(outlier.shape = NA, alpha = 0.5, aes(fill = type)) +
-  geom_jitter(width = 0.15, size = 0.5, color = "black", shape = 21) +
-  scale_y_continuous(limits = c(-0.05, 1.05),
-                     breaks = seq(0, 1, by = 0.25)) +
-  ylab("Aging Attribution") + ggtitle("NonClonal") +
-  scale_fill_manual(values = color_anno) +
-  theme_bw() +
-  theme(axis.title.x = element_blank(),
-        axis.title.y = element_text(size = 8),
-        axis.text = element_text(size = 6),
-        plot.title = element_text(size = 8, hjust = 0.5, margin = margin(b=0)),
-        panel.grid = element_blank(),
-        plot.margin = margin(0,5,0,0),
+        strip.text = element_text(size = 8, margin = margin(b=0)),
+        strip.background = element_blank(),
         legend.position = "none")
 
 ## Combine all figures together into a panel
-combined_plot_boxplot <- (p100 + p10 + p110 + p11) +
-  plot_layout(widths = c(1,1,1,1))
+combined_plot_boxplot <- (p10 + p11) +
+  plot_layout(widths = c(1,1))
 
 ## Correlation analysis with aging
 combined_all_clonal$type_num <- as.numeric(combined_all_clonal$type)
@@ -347,7 +318,7 @@ df1$Samples <- factor(x = df1$Samples, levels = c("UC2T", "UC2N"), labels = c("T
 p2 <-ggplot(data = df1, aes(x = method, y = value, fill = signatures)) + 
   geom_bar(position = "stack", stat = "identity", width = 0.8) +
   scale_fill_manual(values = sbs.color2) +
-  ylab("Proportion") + ggtitle("UC2") +
+  ylab("Proportion") + ggtitle("UC2\n────────────────────") +
   facet_grid2(. ~ Samples, scales = "free", space = "free",
               strip = strip_themed(
               text_x = list(
@@ -384,7 +355,7 @@ df1$Samples <- factor(x = df1$Samples, levels = c("UC4T", "UC4N"), label = c("Tu
 p3 <-ggplot(data = df1, aes(x = method, y = value, fill = signatures)) + 
   geom_bar(position = "stack", stat = "identity", width = 0.8) +
   scale_fill_manual(values = sbs.color2) +
-  ylab("Proportion") + ggtitle("UC4") +
+  ylab("Proportion") + ggtitle("UC4\n────────────────────") +
   facet_grid2(. ~ Samples, scales = "free", space = "free",
               strip = strip_themed(
               text_x = list(
@@ -419,7 +390,7 @@ df1$Samples <- factor(x = df1$Samples, levels = c("UC5T", "UC5N"), label = c("Tu
 p4 <-ggplot(data = df1, aes(x = method, y = value, fill = signatures)) + 
   geom_bar(position = "stack", stat = "identity", width = 0.8) +
   scale_fill_manual(values = sbs.color2) +
-  ylab("Proportion") + ggtitle("UC5") +
+  ylab("Proportion") + ggtitle("UC5\n────────────────────") +
   facet_grid2(. ~ Samples, scales = "free", space = "free",
               strip = strip_themed(
               text_x = list(
@@ -469,7 +440,7 @@ b7 <- binom.test(x = assignment_tmb_clonal[which(rownames(assignment_tmb_clonal)
 p5 <-ggplot(data = df1, aes(x = method, y = value, fill = signatures)) + 
   geom_bar(position = "stack", stat = "identity", width = 0.8) +
   scale_fill_manual(values = sbs.color2) +
-  ylab("Proportion") + ggtitle("UC7") +
+  ylab("Proportion") + ggtitle("UC7\n─────────────────────────────────") +
   facet_grid2(. ~ Samples, scales = "free", space = "free",
               strip = strip_themed(
               text_x = list(
@@ -507,7 +478,7 @@ df1$Samples <- factor(x = df1$Samples, levels = c("UC10T", "UC10N"), labels = c(
 p6 <-ggplot(data = df1, aes(x = method, y = value, fill = signatures)) + 
   geom_bar(position = "stack", stat = "identity", width = 0.8) +
   scale_fill_manual(values = sbs.color2) +
-  ylab("Proportion") + ggtitle("UC10") +
+  ylab("Proportion") + ggtitle("UC10\n────────────────────") +
   facet_grid2(. ~ Samples, scales = "free", space = "free",
               strip = strip_themed(
               text_x = list(
@@ -542,7 +513,7 @@ df1$Samples <- factor(x = df1$Samples, levels = c("UC11T", "UC11N"), labels = c(
 p7 <-ggplot(data = df1, aes(x = method, y = value, fill = signatures)) + 
   geom_bar(position = "stack", stat = "identity", width = 0.8) +
   scale_fill_manual(values = sbs.color2) +
-  ylab("Proportion") + ggtitle("UC11") +
+  ylab("Proportion") + ggtitle("UC11\n────────────────────") +
   facet_grid2(. ~ Samples, scales = "free", space = "free",
               strip = strip_themed(
               text_x = list(
@@ -583,7 +554,7 @@ df1$Samples <- factor(x = df1$Samples, levels = c("UC13T", "UC13N"), label = c("
 p8 <-ggplot(data = df1, aes(x = method, y = value, fill = signatures)) + 
   geom_bar(position = "stack", stat = "identity", width = 0.8) +
   scale_fill_manual(values = sbs.color2) +
-  ylab("Proportion") + ggtitle("UC13") +
+  ylab("Proportion") + ggtitle("UC13\n────────────────────") +
   facet_grid2(. ~ Samples, scales = "free", space = "free",
               strip = strip_themed(
               text_x = list(
@@ -630,7 +601,7 @@ df1$Samples <- factor(x = df1$Samples, levels = c("UC14T", "UC14N", "UC14_Blood"
 p9 <-ggplot(data = df1, aes(x = method, y = value, fill = signatures)) + 
   geom_bar(position = "stack", stat = "identity", width = 0.8) +
   scale_fill_manual(values = sbs.color2) +
-  ylab("Proportion") + ggtitle("UC14") +
+  ylab("Proportion") + ggtitle("UC14\n─────────────────────────────────────────") +
   facet_grid2(. ~ Samples, scales = "free", space = "free",
               strip = strip_themed(
               text_x = list(
@@ -687,7 +658,7 @@ df1$Samples <- factor(x = df1$Samples, levels = c("UC18T", "UC18N", "UC18_Blood"
 p10 <-ggplot(data = df1, aes(x = method, y = value, fill = signatures)) + 
   geom_bar(position = "stack", stat = "identity", width = 0.8) +
   scale_fill_manual(values = sbs.color2) +
-  ylab("Proportion") + ggtitle("UC18") +
+  ylab("Proportion") + ggtitle("UC18\n──────────────────────────────────────────────") +
   facet_grid2(. ~ Samples, scales = "free", space = "free",
               strip = strip_themed(
               text_x = list(
@@ -744,7 +715,7 @@ df1$Samples <- factor(x = df1$Samples, levels = c("UC19T", "UC19N", "UC19_Blood"
 p11 <-ggplot(data = df1, aes(x = method, y = value, fill = signatures)) + 
   geom_bar(position = "stack", stat = "identity", width = 0.8) +
   scale_fill_manual(values = sbs.color2) +
-  ylab("Proportion") + ggtitle("UC19") +
+  ylab("Proportion") + ggtitle("UC19\n──────────────────────────────────────────────") +
   facet_grid2(. ~ Samples, scales = "free", space = "free",
               strip = strip_themed(
               text_x = list(
@@ -774,6 +745,8 @@ p11 <-ggplot(data = df1, aes(x = method, y = value, fill = signatures)) +
         legend.position = "none") +
   xlab("p = 4.85e-8       p = 0.014         p = 0.33          p = 0.014  ")
 
+p11
+
 t19 <- binom.test(x = assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC19T"), "SBS22a"],
                  n = sum(assignment_tmb_clonal[which(rownames(assignment_tmb_clonal) == "UC19T"),]),
                  p = assignment_res_nonclonal_long %>% dplyr::filter(Samples == "UC19T",
@@ -800,7 +773,7 @@ df1$Samples <- factor(x = df1$Samples, levels = c("UC26T", "UC26N"), labels = c(
 p12 <-ggplot(data = df1, aes(x = method, y = value, fill = signatures)) + 
   geom_bar(position = "stack", stat = "identity", width = 0.8) +
   scale_fill_manual(values = sbs.color2) +
-  ylab("Proportion") + ggtitle("UC26") +
+  ylab("Proportion") + ggtitle("UC26\n────────────────────") +
   facet_grid2(. ~ Samples, scales = "free", space = "free",
               strip = strip_themed(
               text_x = list(
@@ -835,7 +808,7 @@ df1$Samples <- factor(x = df1$Samples, levels = c("UC34T", "UC34N", "UC34_Blood"
 p13 <-ggplot(data = df1, aes(x = method, y = value, fill = signatures)) + 
   geom_bar(position = "stack", stat = "identity", width = 0.8) +
   scale_fill_manual(values = sbs.color2) +
-  ylab("Proportion") + ggtitle("UC34") +
+  ylab("Proportion") + ggtitle("UC34\n─────────────────────────────────") +
   facet_grid2(. ~ Samples, scales = "free", space = "free",
               strip = strip_themed(
               text_x = list(
@@ -971,7 +944,7 @@ combined_plot1 <- free(wrap_elements(combined_plot_boxplot)) + wrap_elements(com
         text = element_text(family = "Arial"))
 
 ggsave("/mnt/data1/peter/repo/AAmanu/figure/figure5.png", 
-       width = 170, height = 170,
+       width = 170, height = 190,
        units = "mm", dpi = 600)
 ```
 
