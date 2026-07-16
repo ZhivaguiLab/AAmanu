@@ -139,123 +139,244 @@ p3 <- ggplot(mSigAct_pd, aes(x = signatures, y = value)) +
         legend.box.margin = margin(0, -5, 0, -5))
 ```
 
-How many SBS22a positive? (intext)
+Panel B Forest plot (Analysis and code adapted from Sanskruti)
 ```{r}
-mSigAct_pd %>% dplyr::filter(signatures == "SBS22a",
-                             value > 0.05)
-```
+glm_results <- read.csv(
+  "/home/sanskruti/R/aa_exposure_/SBS22a_GLM_forest_plot_results.csv",
+  stringsAsFactors = FALSE
+)
 
-Enrichment analysis for cell type (intext)
-```{r}
-## New column to transform t b and nkcell to Lymphoid
-mSigAct_pd$lineage <- ifelse(mSigAct_pd$celltype == "Myeloid", "Myeloid", "Lymphoid")
-signatures <- unique(as.character(mSigAct_pd$signatures))
+# Remove intercept
+forest_df <- glm_results[
+  glm_results$term != "Intercept",
+]
 
-# Haldane–Anscombe correction because zero cell count present
-ha_or <- function(tab) {
-  stopifnot(all(dim(tab) == c(2, 2)))
-  tab <- tab + 0.5
-  or <- (tab[2,2] * tab[1,1]) /
-        (tab[2,1] * tab[1,2])
-  return(or)
-}
+# ---------------------------------------------------
+# Create clean labels
+# ---------------------------------------------------
 
-## Loop though each and perform fisher exact test
-lineage_res <- list()
+forest_df$label <- as.character(
+  forest_df$term
+)
 
-for (b in unique(mSigAct_pd$celltype)) {
-  for(s in signatures) {
-    sel_df <- mSigAct_pd %>% dplyr::filter(signatures == s) %>%
-      mutate(status = ifelse(value > 0.05, 1, 0),
-             obslineage = ifelse(celltype == b, 1, 0))
-    tab <- table(sel_df$obslineage,
-                 sel_df$status)
-    ft <- fisher.test(tab)
-    
-    or_ha <- ha_or(tab)
-  
-    case <- paste(b, s, sep = "_")
-    
-    lineage_res[[case]] <- data.frame(
-      Batch = b,
-      Signatures = s,
-      odds_ratio = unname(ft$estimate),
-      or_ha = or_ha,
-      lower_CI = ft$conf.int[1],
-      upper_CI = ft$conf.int[2],
-      p_value = ft$p.value)
-  }
-}
+# Extract cell-type names from model terms
+cell_type_rows <- grepl(
+  "^C\\(type",
+  forest_df$term
+)
 
-## List to DF and FDR correction
-lineage_res <- as.data.frame(do.call(rbind, lineage_res))
-lineage_res$FDR <- p.adjust(lineage_res$p_value, method = "BH")
-```
+forest_df$label[
+  cell_type_rows
+] <- sub(
+  "^.*\\[T\\.(.*)\\]$",
+  "\\1",
+  forest_df$term[
+    cell_type_rows
+  ]
+)
 
-Panel B Forest plot showing odd ratios of signatures across cell type
-```{r}
-## Limit the x axis sometimes too large
-xmin <- 1e-3 
-xmax <- 500
+# Rename sequencing-method term
+sequencing_rows <- grepl(
+  "Sequencing_method",
+  forest_df$term
+)
 
-## Process data to get HA OR, lower and upper with the xaxis limits
-plot_df <- lineage_res %>%
-  mutate(
-    OR_plot = pmin(or_ha, xmax),
-    upper_plot = pmin(upper_CI, xmax),
-    inf = is.infinite(upper_CI)
+forest_df$label[
+  sequencing_rows
+] <- paste(
+  "Sequencing",
+  "method",
+  sep = "\n"
+)
+
+# Rename total mutational burden
+forest_df$label[
+  forest_df$term == "log_totalMut"
+] <- "Total mutational burden"
+
+# Replace remaining underscores with spaces
+forest_df$label <- gsub(
+  "_",
+  " ",
+  forest_df$label
+)
+
+# Convert to factor only after all label edits are complete
+forest_df$label <- factor(
+  forest_df$label,
+  levels = rev(
+    unique(forest_df$label)
   )
+)
 
-plot_df$lower_CI[plot_df$lower_CI == 0] <- xmin  # 0 to 1e-3 so doesnt get affected by log10 transformation
+# ---------------------------------------------------
+# Statistical significance
+# ---------------------------------------------------
 
-## Factor order
-plot_df$Signatures <- factor(x = plot_df$Signatures, 
-                             levels = rev(c("SBS1", "SBS5", "SBS22a", "SBS36", "SBS45", "SBS95")))
+forest_df$significance <- ifelse(
+  forest_df$p_value < 0.05,
+  "Significant",
+  "Not significant"
+)
 
-plot_df$Batch <- factor(x = plot_df$Batch, levels = c("B-cell", "T-cell", "NK-cell", "Myeloid"))
+# Significance stars
+forest_df$stars <- ifelse(
+  forest_df$p_value < 0.001,
+  "***",
+  ifelse(
+    forest_df$p_value < 0.01,
+    "**",
+    ifelse(
+      forest_df$p_value < 0.05,
+      "*",
+      ""
+    )
+  )
+)
 
-pval_df <- plot_df %>% dplyr::filter(FDR < 0.05) %>%
-  mutate(x = Inf,
-         label = paste0("p =", signif(FDR, digits = 2)))
+# Arrange terms in current dataframe order
+forest_df$label <- factor(
+  forest_df$label,
+  levels = rev(
+    unique(forest_df$label)
+  )
+)
 
-p1 <- ggplot(plot_df, aes(x = OR_plot, y = Signatures)) +
-  geom_errorbarh(aes(xmin = lower_CI,
-                     xmax = upper_plot),
-                 height = 0.2,
-                 linewidth = 0.25) +
-  geom_point(size = 0.5) +
-  geom_text(
-    data = pval_df,
-    aes(x = Inf, y = Signatures, label = label),
-    inherit.aes = FALSE,
-    vjust = 2.5, hjust = 1.5,
-    size = 1.6
+forest_plot <- ggplot(
+  forest_df,
+  aes(
+    x = IRR,
+    y = label
+  )
+) +
+  geom_vline(
+    xintercept = 1,
+    linetype = "dashed",
+    linewidth = 0.5,
+    color = "gray40"
   ) +
-  facet_wrap(.~Batch) +
-  scale_x_log10(breaks = 10^(-4:4), labels = -4:4) +
-  geom_vline(xintercept = 1, linetype = 2, colour = "grey50", linewidth = 0.25) +
-  ## Arrow for infinite CI
-  geom_segment(
-    data = subset(plot_df, inf),
-    aes(x = xmax * 0.8,
-        xend = xmax * 0.85,
-        y = Signatures,
-        yend = Signatures),
-    arrow = arrow(type = "closed",
-                  length = unit(0.1, "cm")),
-    inherit.aes = FALSE) +
-  xlab(expression(log[10](OR))) + ggtitle("scWGS") +
-  theme_bw() +
-  theme(axis.title.x = element_text(size = 8),
-        axis.title.y = element_blank(),
-        plot.title = element_text(size = 8, hjust = 0.5, margin = margin(0,0,0,0)),
-        axis.text = element_text(size = 6),
-        panel.grid = element_blank(),
-        panel.spacing = unit(0.2, "lines"),
-        strip.background = element_blank(),
-        strip.text = element_text(size = 8, margin = margin(0,0,0,0)),
-        plot.margin = margin(0,0,0,0))
-p1
+  
+  # Confidence intervals
+  geom_errorbarh(
+    aes(
+      xmin = IRR_ci_lower,
+      xmax = IRR_ci_upper,
+      color = significance
+    ),
+    height = 0.1,
+    linewidth = 0.5
+  ) +
+  
+  # Point estimates
+  geom_point(
+    aes(
+      fill = significance,
+      color = significance
+    ),
+    shape = 21,
+    size = 1,
+    stroke = 0.9
+  ) +
+  
+  # Significance stars above points
+  geom_text(
+    aes(
+      label = stars,
+      color = significance
+    ),
+    position = position_nudge(
+      y = 0.15
+    ),
+    size = 3,
+    fontface = "bold",
+    show.legend = FALSE
+  ) +
+  
+  scale_color_manual(
+    values = c(
+      "Significant" = "red",
+      "Not significant" = "black"
+    )
+  ) +
+  
+  scale_fill_manual(
+    values = c(
+      "Significant" = "red",
+      "Not significant" = "white"
+    )
+  ) +
+  
+  scale_x_log10(
+    breaks = c(
+      0.000000001,
+      0.000001,
+      0.001,
+      1,
+      2,
+      4,
+      10,
+      30
+    ),
+    
+    labels = c(
+      "0.000000001",
+      "0.000001",
+      "0.001",
+      "1",
+      "2",
+      "4",
+      "10",
+      "30"
+    )
+  ) +
+  
+  labs(
+    x = "Incidence rate ratio (95% CI)",
+    y = NULL,
+    color = NULL,
+    fill = NULL
+  ) +
+  
+  # Equivalent to Seaborn white-grid styling
+  theme_bw(
+    base_size = 13
+  ) +
+  
+  theme(
+    axis.text.y = element_text(
+      size = 6,
+      color = "black"
+    ),
+    axis.text.x = element_text(
+      size = 6,
+      color = "black"
+    ),
+    axis.title.x = element_text(
+      size = 8
+    ),
+    axis.title.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    
+    panel.grid.major = element_line(
+      color = "gray88",
+      linewidth = 0.5
+    ),
+    panel.grid.minor = element_blank(),
+    
+    panel.border = element_rect(
+      color = "black",
+      linewidth = 0.8
+    ),
+    
+    legend.position = "none",
+    
+    plot.margin = margin(
+      t = 0,
+      r = 0,
+      b = 0,
+      l = 0
+    )
+  )
 ```
 
 Panel C: Complement scWGS with DS
@@ -317,18 +438,28 @@ p4 <- ggplot(data = scWGS_sbs22, aes(x = celltype, y = value)) +
 
 ```{r}
 layout <- "
-AAAACCCC
-AAAACCCC
-BBBBCCCC
-BBBBCCCC
+AAAACCCZ
+AAAACCCZ
+AAAACCCZ
+BBBBCCCZ
+BBBBCCCZ
 YYYYYYYY
+YYYYYYYY
+YYYYYYYY"
+
+layout <- "
+AAAAAZZZ
+AAAAAZZZ
+AAAAAZZZ
+CCBBBZZZ
+CCBBBZZZ
 YYYYYYYY
 YYYYYYYY
 YYYYYYYY
 YYYYYYYY"
 
 set.seed(425)
-combined_plot1 <- free(p3) + free(p4) + p1 + plot_layout(design=layout) + #
+combined_plot1 <- free(p3) + free(p4) + forest_plot + plot_layout(design=layout) + #
   plot_annotation(tag_levels = list(c("A", "C", "B", "", "", "", ""))) &
   theme(plot.tag = element_text(face = 'bold', size = 10),
         text = element_text(family = "Arial"))

@@ -299,10 +299,10 @@ p3 <- ggplot(combined_res, aes(x = type, y = value)) +
 layout <- "
 AAAAAYYY
 AAAAAYYY
+AAAAAYYY
 BBCCCYYY
 BBCCCYYY
-ZZZZZZZZ
-ZZZZZZZZ
+BBCCCYYY
 ZZZZZZZZ
 ZZZZZZZZ"
 
