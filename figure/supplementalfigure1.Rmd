@@ -87,6 +87,14 @@ for(n in ID) {
     as.numeric(alt_counts)
   }]
   
+  ## Germline filtering
+  n.data$germline <- parallel::mclapply(X = as.list(1:nrow(n.data)), FUN = function(x) {
+    binom.test(x = n.data[x, alt_counts], n = as.numeric(n.data[x, DP]), p = 0.5, alternative = "two.sided")$p.value
+  }, mc.cores = 20)
+  n.data$germline_hr <- n.data$germline >= 0.05
+  n.data <- n.data %>% dplyr::filter(germline_hr != TRUE) %>% 
+    dplyr::select(-germline, -germline_hr)
+  
   n.data$group <- n
   n.data$type <- "N"
   
@@ -120,25 +128,30 @@ n.data[, alt_counts := {
                   TU)))
     as.numeric(alt_counts)
   }]
+
+## Germline filtering
+n.data$germline <- parallel::mclapply(X = as.list(1:nrow(n.data)), FUN = function(x) {
+  binom.test(x = n.data[x, alt_counts], n = as.numeric(n.data[x, DP]), p = 0.5, alternative = "two.sided")$p.value
+  }, mc.cores = 20)
+n.data$germline_hr <- n.data$germline >= 0.05
+n.data <- n.data %>% dplyr::filter(germline_hr != TRUE) %>% 
+  dplyr::select(-germline, -germline_hr)
   
 n.data$group <- "UC7"
-n.data$type <- "Kidney"
+n.data$type <- "N"
   
 n.data <- n.data %>% dplyr::select(group, type, vaf, alt_counts, DP)
 
 ## Append UC7DN to data
 all_vaf <- rbind(all_vaf, n.data)
 all_vaf <- all_vaf %>% mutate(hr_type = case_when(type == "T" ~ "Tumor",
-                                                  type == "N" ~ "Normal",
-                                                  type == "Kidney" ~ "Kidney"))
-## Convert UC4 distant normal to Bladder
-all_vaf[which(all_vaf$type == "N" & all_vaf$group == "UC4"), "hr_type"] <- "Bladder"
+                                                  type == "N" ~ "Normal"))
 
 ## Factor order
 all_vaf$group <- factor(x = all_vaf$group, 
                         levels = c("UC2", "UC4", "UC5", "UC7", "UC10", "UC11", "UC13", "UC14", "UC18", "UC19", "UC26", "UC34"))
 
-all_vaf$hr_type <- factor(x = all_vaf$hr_type, levels = c("Tumor", "Normal", "Kidney", "Bladder"))
+all_vaf$hr_type <- factor(x = all_vaf$hr_type, levels = c("Tumor", "Normal"))
 
 ## Color annotation
 type_anno <- c("#A6A6A6", "#4F81BD", "#E9C46A", "#6A4C93")
@@ -154,10 +167,10 @@ p1 <- ggplot(data = all_vaf, aes(x = vaf, fill = hr_type)) +
         axis.text = element_text(size = 6),
         axis.title = element_text(size = 8),
         legend.title = element_blank(),
-        legend.position = c(0.65, -0.15),
+        legend.position = c(0.58, -0.15),
         legend.justification = c(1,0),
         legend.direction = "horizontal",
-        legend.key.size = unit(0.2, "cm"),
+        legend.key.size = unit(0.3, "cm"),
         legend.text = element_text(size = 5),
         strip.background = element_blank(),
         strip.text = element_text(size = 8, face = "bold")
