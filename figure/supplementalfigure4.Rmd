@@ -1,5 +1,5 @@
 ---
-title: "supplementalfigure4"
+title: "supplementalfigure2"
 output: html_document
 date: "2026-06-04"
 editor_options: 
@@ -12,146 +12,25 @@ library(patchwork)
 library(ggh4x)
 ```
 
-Function to plot SBS96
 ```{r}
-getSBSorder <- function() {
-    counter <- 1
-    df <- as.data.frame(matrix(data = NA, nrow = 96, ncol = 3))
-    all_bp <- c("A", "C", "G", "T")
-    pyr_muts <- c("C>A", "C>G", "C>T", "T>A", "T>C", "T>G")
-    for(m in pyr_muts){
-      for(a in all_bp){
-        for(b in all_bp){
-          df[counter,1] <- paste(a, "[",m, "]", b, sep="")
-          df[counter,2] <- m
-          df[counter,3] <- paste(a, substring(m,1,1),b, sep="")
-          counter <- counter + 1 ## Add counter for next row
-        }
-      }
-    }
-    return(df)
-  }
-
-sbs.df <- getSBSorder()
-
-mut.color <- c('deepskyblue','black','red','lightgrey','yellowgreen','pink')
-
-## Function to plot SBS96
-plotSBS <- function(df, x.label, y.label, alpha = 1, strip.color = "white", strip.size = 3.5) {
-  df.pd <- df %>% left_join(x = ., y = sbs.df, by = c("MutationType"="V1"))
-  df.pd$MutationType <- factor(x = df.pd$MutationType, levels = sbs.df$V1)
-
-  # anno <- df.pd %>% dplyr::filter(V2 == "T>G") %>%
-  #   mutate(x = Inf,
-  #          y = Inf,
-  #          label = paste0("Total: ", round(sum(df.pd$value), digits = 0))
-  #          )
-
-  p1 <- ggplot(data = df.pd, aes(x = MutationType, y = value/sum(value)*100)) +
-    geom_col(aes(fill = V2), alpha = alpha) +
-    theme_bw() +
-    guides(fill = "none") +
-    scale_fill_manual(values = mut.color) +
-    facet_wrap2(.~V2, nrow = 1, scale = "free_x", drop = TRUE,
-                strip = strip_themed(
-                background_x = list(
-                  element_rect(fill = mut.color[1], color = "transparent"),
-                  element_rect(fill = mut.color[2], color = "transparent"),
-                  element_rect(fill = mut.color[3], color = "transparent"),
-                  element_rect(fill = mut.color[4], color = "transparent"),
-                  element_rect(fill = mut.color[5], color = "transparent"),
-                  element_rect(fill = mut.color[6], color = "transparent")
-                  ),
-                text_x = list(
-                  element_text(color = strip.color, face = "bold", size = strip.size, margin = margin(1, 1, 1, 1))
-                  )
-                )) +
-    # geom_text(data = anno, aes(x = x, y = y, label = label), inherit.aes = FALSE, size = 2.4,
-    #           vjust = 1.1,
-    #           hjust = 1.1) +
-    scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
-    scale_x_discrete(labels = setNames(sbs.df$V3, sbs.df$V1)) +
-    coord_cartesian(clip = "off") +
-    ylab(y.label) + xlab(x.label) +
-    theme(panel.border = element_blank(),
-          strip.background = element_blank(),
-          panel.spacing = unit(0, "lines"),
-          panel.grid.major = element_blank(),
-          panel.grid.minor = element_blank(),
-          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 3),
-          axis.ticks.x = element_blank(),
-          axis.text.y = element_text(size = 6),
-          axis.title.y = element_text(size = 8),
-          axis.title.x = element_text(size = 8))
-}
-
-## Function to plot SBS96
-plotSBSnostrip <- function(df, x.label, y.label, alpha = 1, strip.color = "white", strip.size = 3.5) {
-  df.pd <- df %>% left_join(x = ., y = sbs.df, by = c("MutationType"="V1"))
-  df.pd$MutationType <- factor(x = df.pd$MutationType, levels = sbs.df$V1)
-
-  # anno <- df.pd %>% dplyr::filter(V2 == "T>G") %>%
-  #   mutate(x = Inf,
-  #          y = Inf,
-  #          label = paste0("Total: ", round(sum(df.pd$value), digits = 0))
-  #          )
-
-  p1 <- ggplot(data = df.pd, aes(x = MutationType, y = value/sum(value)*100)) +
-    geom_col(aes(fill = V2), alpha = alpha) +
-    theme_bw() +
-    guides(fill = "none") +
-    scale_fill_manual(values = mut.color) +
-    facet_wrap2(.~V2, nrow = 1, scale = "free_x", drop = TRUE,
-                strip = strip_themed(
-                background_x = list(
-                  element_blank(), element_blank(), element_blank(), element_blank(), element_blank(), element_blank()
-                  ),
-                text_x = list(
-                  element_text(color = strip.color, face = "bold", size = strip.size, margin = margin(1, 1, 1, 1))
-                  )
-                )) +
-    # geom_text(data = anno, aes(x = x, y = y, label = label), inherit.aes = FALSE, size = 2.4,
-    #           vjust = 1.1,
-    #           hjust = 1.1) +
-    scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
-    scale_x_discrete(labels = setNames(sbs.df$V3, sbs.df$V1)) +
-    coord_cartesian(clip = "off") +
-    ylab(y.label) + xlab(x.label) +
-    theme(panel.border = element_blank(),
-          strip.background = element_blank(),
-          panel.spacing = unit(0, "lines"),
-          panel.grid.major = element_blank(),
-          panel.grid.minor = element_blank(),
-          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 3),
-          axis.ticks.x = element_blank(),
-          axis.text.y = element_text(size = 6),
-          axis.title.y = element_text(size = 8),
-          axis.title.x = element_text(size = 8))
-}
-```
-
-Prepare data for plotting
-```{r}
-## SBS192 for strand bias info for SBS6
 ds_sbs192 <- data.table::fread("/mnt/data1/peter/repo/AAmanu/data/matGen/ds_filtered/output/SBS/UC_AA.SBS288.all") %>% as.data.frame() %>%
   dplyr::filter(!grepl(pattern = "N:", x = MutationType))
-## SBS96
-ds_sbs96 <- data.table::fread("/mnt/data1/peter/repo/AAmanu/data/matGen/ds_filtered/output/SBS/UC_AA.SBS96.all") %>% as.data.frame()
 
-## SBS192 mutation count matrix
+## SBS192 count matrix per sample
 ds_sbs192_count <- ds_sbs192 %>% remove_rownames() %>% column_to_rownames(var = "MutationType") %>%
   t() %>% as.data.frame() %>% rownames_to_column(var = "Samples") %>%
-  dplyr::filter(grepl(pattern = "N|T", x = Samples)) %>%
-  mutate(type = case_when(grepl(pattern = "T", x = Samples) ~ "T",
+  mutate(type = case_when(grepl(pattern = "_", x = Samples) ~ "Other",
+                          grepl(pattern = "T", x = Samples) ~ "T",
                           grepl(pattern = "N", x = Samples) ~ "AN"),
          group = paste0("UC", as.numeric(str_extract(Samples, "\\d+"))),
          newName = paste0(group, type)) %>%
+  dplyr::filter(type != "Other") %>%
   column_to_rownames(var = "newName") %>%
   dplyr::select(-Samples, -type, -group) %>% 
   t() %>% as.data.frame() %>%
   rownames_to_column(var = "MutationType")
- 
-## Collapse SBS192 mutation count matrix to SBS6 
+
+## Convert SBS192 to SBS6 count matrix per sample while retaining strand bias information
 ds_sbs192_collapsed_sbs6 <- ds_sbs192_count %>%
   mutate(type = gsub(pattern = ".*\\[", replacement = "", x = MutationType),
          type = gsub(pattern = "\\].*", replacement = "", x = type),
@@ -159,823 +38,141 @@ ds_sbs192_collapsed_sbs6 <- ds_sbs192_count %>%
   dplyr::select(-MutationType) %>%
   dplyr::group_by(strand, type) %>%
   summarise(across(everything(), sum)) %>%
-  dplyr::ungroup() %>%
-  mutate(across(where(is.numeric),
-                ~ .x / sum(.x, na.rm = TRUE)))
+  dplyr::ungroup() #%>%
+  # mutate(across(where(is.numeric),
+  #               ~ .x / sum(.x, na.rm = TRUE)))
+
 ## Factor order
 ds_sbs192_collapsed_sbs6$strand <- factor(x = ds_sbs192_collapsed_sbs6$strand, levels = rev(c("T", "U")))
 ds_sbs192_collapsed_sbs6$type <- factor(x = ds_sbs192_collapsed_sbs6$type,
                                          levels = rev(c("C>A", "C>G", "C>T", "T>A", "T>C", "T>G")))
+
+## Rename samples
+ds_sbs192_collapsed_sbs6 <- ds_sbs192_collapsed_sbs6 %>% dplyr::rename("UC4DN"="UC4AN", "UC7DN"="UC7AN")
 ```
 
-Plotting SBS96 (left) and SBS6 (right). Same as supplemental figure 2. Hardcoded to plot each sample by individual
+SBS96 dual label
 ```{r}
-p1 <- plotSBS(df = data.frame(MutationType = ds_sbs96$MutationType, 
-                              value = ds_sbs96$UC2T), 
-              x.label = NULL, y.label = "T", strip.size = 4) +
-  theme(plot.margin = margin(0, 0, 0, 0),
-        axis.text.x = element_text(size = 1.5),
-        axis.ticks.x = element_blank(),
-        axis.title.x = element_blank(),
-        axis.text.y = element_blank(),
-        axis.title.y = element_text(size = 6),
-        axis.ticks.y = element_blank())
-
-p12 <- ds_sbs192_collapsed_sbs6 %>% dplyr::select(strand, type, UC2T) %>% 
-  'colnames<-' (c("strand", "type", "value")) %>%
-  ggplot(data = ., aes(x = value, y = type, fill = strand)) +
-  scale_fill_manual(values = c("T" = "#014666", "U" = "#E42926"),
-                    breaks = c("T", "U")) +
-  geom_col(width = 0.8,
-           position = position_dodge(width = 0.9)) +
-  scale_x_continuous(expand = expansion(mult = c(0, 0))) +
-  theme_bw() +
-  theme(axis.text = element_text(size = 3),
-        axis.title = element_blank(),
-        axis.ticks = element_blank(),
-        panel.grid = element_blank(),
-        panel.border = element_blank(),
-        axis.line = element_line(colour = "black", linewidth = 0.1),
-        legend.title = element_blank(),
-        legend.key.size = unit(0.1, "cm"),
-        legend.spacing.x = unit(0.05, "cm"),
-        legend.background = element_blank(),
-        legend.text = element_text(size = 3, margin = margin(l = 0)),
-        legend.position = c(1.1, -0.15),
-        legend.justification = c(1, 0),
-        plot.margin = margin(0,0,0,0))
-
-p2 <- plotSBSnostrip(df = data.frame(MutationType = ds_sbs96$MutationType, 
-                                     value = ds_sbs96$UC26N), 
-              x.label = "UC2", y.label = "AN", strip.color = "transparent", strip.size = 0) +
-  theme(axis.ticks.y = element_blank(),
-        axis.text.y = element_blank(),
-        axis.title.y = element_text(size = 6),
-        axis.title.x = element_text(size = 6),
-        axis.text.x = element_text(size = 1.5),
-        plot.margin = margin(0, 0, 0, 0))
-
-p22 <- ds_sbs192_collapsed_sbs6 %>% dplyr::select(strand, type, UC2AN) %>% 
-  'colnames<-' (c("strand", "type", "value")) %>%
-  ggplot(data = ., aes(x = value, y = type, fill = strand)) +
-  scale_fill_manual(values = c("T" = "#014666", "U" = "#E42926")) +
-  geom_col(width = 0.8,
-           position = position_dodge(width = 0.9)) +
-  scale_x_continuous(expand = expansion(mult = c(0, 0))) +
-  theme_bw() +
-  theme(axis.text = element_text(size = 3),
-        axis.title = element_blank(),
-        axis.ticks = element_blank(),
-        panel.border = element_blank(),
-        axis.line = element_line(colour = "black", linewidth = 0.1),
-        panel.grid = element_blank(),
-        legend.position = "none",
-        plot.margin = margin(0,0,0,0))
-
-plot1 <- p1 + p12 + plot_layout(width = c(1, 0.3))
-plot2 <- p2 + p22 + plot_layout(width = c(1, 0.3))
-
-uc2 <- plot1 / plot2 +
-  plot_layout(heights = c(1, 1))
-
-## UC4 
-
-p1 <- plotSBS(df = data.frame(MutationType = ds_sbs96$MutationType, 
-                              value = ds_sbs96$UC4T), 
-              x.label = NULL, y.label = "T", strip.size = 4) +
-  theme(plot.margin = margin(0, 0, 0, 0),
-        axis.text.x = element_text(size = 1.5),
-        axis.ticks.x = element_blank(),
-        axis.title.x = element_blank(),
-        axis.text.y = element_blank(),
-        axis.title.y = element_text(size = 6),
-        axis.ticks.y = element_blank())
-
-p12 <- ds_sbs192_collapsed_sbs6 %>% dplyr::select(strand, type, UC4T) %>% 
-  'colnames<-' (c("strand", "type", "value")) %>%
-  ggplot(data = ., aes(x = value, y = type, fill = strand)) +
-  scale_fill_manual(values = c("T" = "#014666", "U" = "#E42926")) +
-  geom_col(width = 0.8,
-           position = position_dodge(width = 0.9)) +
-  scale_x_continuous(expand = expansion(mult = c(0, 0))) +
-  theme_bw() +
-  theme(axis.text = element_text(size = 3),
-        axis.title = element_blank(),
-        axis.ticks = element_blank(),
-        panel.grid = element_blank(),
-        panel.border = element_blank(),
-        axis.line = element_line(colour = "black", linewidth = 0.1),
-        legend.position = "none",
-        plot.margin = margin(0,0,0,0))
-p12
-
-p2 <- plotSBSnostrip(df = data.frame(MutationType = ds_sbs96$MutationType, 
-                                     value = ds_sbs96$UC4N), 
-              x.label = "UC4", y.label = "DN", strip.color = "transparent", strip.size = 0) +
-  theme(axis.ticks.y = element_blank(),
-        axis.text.y = element_blank(),
-        axis.title.y = element_text(size = 6),
-        axis.title.x = element_text(size = 6),
-        axis.text.x = element_text(size = 1.5),
-        plot.margin = margin(0, 0, 0, 0))
-
-p22 <- ds_sbs192_collapsed_sbs6 %>% dplyr::select(strand, type, UC4AN) %>% 
-  'colnames<-' (c("strand", "type", "value")) %>%
-  ggplot(data = ., aes(x = value, y = type, fill = strand)) +
-  scale_fill_manual(values = c("T" = "#014666", "U" = "#E42926")) +
-  geom_col(width = 0.8,
-           position = position_dodge(width = 0.9)) +
-  scale_x_continuous(expand = expansion(mult = c(0, 0))) +
-  theme_bw() +
-  theme(axis.text = element_text(size = 3),
-        axis.title = element_blank(),
-        axis.ticks = element_blank(),
-        panel.border = element_blank(),
-        axis.line = element_line(colour = "black", linewidth = 0.1),
-        panel.grid = element_blank(),
-        legend.position = "none",
-        plot.margin = margin(0,0,0,0))
-
-plot1 <- p1 + p12 + plot_layout(width = c(1, 0.3))
-plot2 <- p2 + p22 + plot_layout(width = c(1, 0.3))
-
-uc4 <- plot1 / plot2 +
-  plot_layout(heights = c(1, 1))
-
-## UC5 
-
-p1 <- plotSBS(df = data.frame(MutationType = ds_sbs96$MutationType, 
-                              value = ds_sbs96$UC5T), 
-              x.label = NULL, y.label = "T", strip.size = 4) +
-  theme(plot.margin = margin(0, 0, 0, 0),
-        axis.text.x = element_text(size = 1.5),
-        axis.ticks.x = element_blank(),
-        axis.title.x = element_blank(),
-        axis.text.y = element_blank(),
-        axis.title.y = element_text(size = 6),
-        axis.ticks.y = element_blank())
-
-p12 <- ds_sbs192_collapsed_sbs6 %>% dplyr::select(strand, type, UC5T) %>% 
-  'colnames<-' (c("strand", "type", "value")) %>%
-  ggplot(data = ., aes(x = value, y = type, fill = strand)) +
-  scale_fill_manual(values = c("T" = "#014666", "U" = "#E42926")) +
-  geom_col(width = 0.8,
-           position = position_dodge(width = 0.9)) +
-  scale_x_continuous(expand = expansion(mult = c(0, 0))) +
-  theme_bw() +
-  theme(axis.text = element_text(size = 3),
-        axis.title = element_blank(),
-        axis.ticks = element_blank(),
-        panel.grid = element_blank(),
-        panel.border = element_blank(),
-        axis.line = element_line(colour = "black", linewidth = 0.1),
-        legend.position = "none",
-        plot.margin = margin(0,0,0,0))
-p12
-
-p2 <- plotSBSnostrip(df = data.frame(MutationType = ds_sbs96$MutationType, 
-                                     value = ds_sbs96$UC5N), 
-              x.label = "UC5", y.label = "AN", strip.color = "transparent", strip.size = 0) +
-  theme(axis.ticks.y = element_blank(),
-        axis.text.y = element_blank(),
-        axis.title.y = element_text(size = 6),
-        axis.title.x = element_text(size = 6),
-        axis.text.x = element_text(size = 1.5),
-        plot.margin = margin(0, 0, 0, 0))
-
-p22 <- ds_sbs192_collapsed_sbs6 %>% dplyr::select(strand, type, UC5AN) %>% 
-  'colnames<-' (c("strand", "type", "value")) %>%
-  ggplot(data = ., aes(x = value, y = type, fill = strand)) +
-  scale_fill_manual(values = c("T" = "#014666", "U" = "#E42926")) +
-  geom_col(width = 0.8,
-           position = position_dodge(width = 0.9)) +
-  scale_x_continuous(expand = expansion(mult = c(0, 0))) +
-  theme_bw() +
-  theme(axis.text = element_text(size = 3),
-        axis.title = element_blank(),
-        axis.ticks = element_blank(),
-        panel.border = element_blank(),
-        axis.line = element_line(colour = "black", linewidth = 0.1),
-        panel.grid = element_blank(),
-        legend.position = "none",
-        plot.margin = margin(0,0,0,0))
-
-plot1 <- p1 + p12 + plot_layout(width = c(1, 0.3))
-plot2 <- p2 + p22 + plot_layout(width = c(1, 0.3))
-
-uc5 <- plot1 / plot2 + 
-  plot_layout(heights = c(1, 1))
-
-## UC7 
-
-p1 <- plotSBS(df = data.frame(MutationType = ds_sbs96$MutationType, 
-                              value = ds_sbs96$UC7T), 
-              x.label = NULL, y.label = "T", strip.size = 4) +
-  theme(plot.margin = margin(0, 0, 0, 0),
-        axis.text.x = element_text(size = 1.5),
-        axis.ticks.x = element_blank(),
-        axis.title.x = element_blank(),
-        axis.text.y = element_blank(),
-        axis.title.y = element_text(size = 6),
-        axis.ticks.y = element_blank())
-
-p12 <- ds_sbs192_collapsed_sbs6 %>% dplyr::select(strand, type, UC7T) %>% 
-  'colnames<-' (c("strand", "type", "value")) %>%
-  ggplot(data = ., aes(x = value, y = type, fill = strand)) +
-  scale_fill_manual(values = c("T" = "#014666", "U" = "#E42926")) +
-  geom_col(width = 0.8,
-           position = position_dodge(width = 0.9)) +
-  scale_x_continuous(expand = expansion(mult = c(0, 0))) +
-  theme_bw() +
-  theme(axis.text = element_text(size = 3),
-        axis.title = element_blank(),
-        axis.ticks = element_blank(),
-        panel.grid = element_blank(),
-        panel.border = element_blank(),
-        axis.line = element_line(colour = "black", linewidth = 0.1),
-        legend.position = "none",
-        plot.margin = margin(0,0,0,0))
-p12
-
-p3 <- plotSBSnostrip(df = data.frame(MutationType = ds_sbs96$MutationType, 
-                                     value = ds_sbs96$UC7N), 
-              x.label = "UC7", y.label = "DN", strip.color = "transparent", strip.size = 0) +
-  theme(axis.ticks.y = element_blank(),
-        axis.text.y = element_blank(),
-        axis.title.y = element_text(size = 6),
-        axis.title.x = element_text(size = 6),
-        axis.text.x = element_text(size = 1.5),
-        plot.margin = margin(0, 0, 0, 0))
-
-p32 <- ds_sbs192_collapsed_sbs6 %>% dplyr::select(strand, type, UC7AN) %>% 
-  'colnames<-' (c("strand", "type", "value")) %>%
-  ggplot(data = ., aes(x = value, y = type, fill = strand)) +
-  scale_fill_manual(values = c("T" = "#014666", "U" = "#E42926")) +
-  geom_col(width = 0.8,
-           position = position_dodge(width = 0.9)) +
-  scale_x_continuous(expand = expansion(mult = c(0, 0))) +
-  theme_bw() +
-  theme(axis.text = element_text(size = 3),
-        axis.title = element_blank(),
-        axis.ticks = element_blank(),
-        panel.border = element_blank(),
-        axis.line = element_line(colour = "black", linewidth = 0.1),
-        panel.grid = element_blank(),
-        legend.position = "none",
-        plot.margin = margin(0,0,0,0))
-
-plot1 <- p1 + p12 + plot_layout(width = c(1, 0.3))
-plot3 <- p3 + p32 + plot_layout(width = c(1, 0.3))
-
-uc7 <- plot1 / plot3 +
-  plot_layout(heights = c(1, 1))
-
-## UC10 
-
-p1 <- plotSBS(df = data.frame(MutationType = ds_sbs96$MutationType, 
-                              value = ds_sbs96$UC10T), 
-              x.label = NULL, y.label = "T", strip.size = 4) +
-  theme(plot.margin = margin(0, 0, 0, 0),
-        axis.text.x = element_text(size = 1.5),
-        axis.ticks.x = element_blank(),
-        axis.title.x = element_blank(),
-        axis.text.y = element_blank(),
-        axis.title.y = element_text(size = 6),
-        axis.ticks.y = element_blank())
-
-p12 <- ds_sbs192_collapsed_sbs6 %>% dplyr::select(strand, type, UC10T) %>% 
-  'colnames<-' (c("strand", "type", "value")) %>%
-  ggplot(data = ., aes(x = value, y = type, fill = strand)) +
-  scale_fill_manual(values = c("T" = "#014666", "U" = "#E42926")) +
-  geom_col(width = 0.8,
-           position = position_dodge(width = 0.9)) +
-  scale_x_continuous(expand = expansion(mult = c(0, 0))) +
-  theme_bw() +
-  theme(axis.text = element_text(size = 3),
-        axis.title = element_blank(),
-        axis.ticks = element_blank(),
-        panel.grid = element_blank(),
-        panel.border = element_blank(),
-        axis.line = element_line(colour = "black", linewidth = 0.1),
-        legend.position = "none",
-        plot.margin = margin(0,0,0,0))
-p12
-
-p2 <- plotSBSnostrip(df = data.frame(MutationType = ds_sbs96$MutationType, 
-                                     value = ds_sbs96$UC10N), 
-              x.label = "UC10", y.label = "AN", strip.color = "transparent", strip.size = 0) +
-  theme(axis.ticks.y = element_blank(),
-        axis.text.y = element_blank(),
-        axis.title.y = element_text(size = 6),
-        axis.title.x = element_text(size = 6),
-        axis.text.x = element_text(size = 1.5),
-        plot.margin = margin(0, 0, 0, 0))
-
-p22 <- ds_sbs192_collapsed_sbs6 %>% dplyr::select(strand, type, UC10AN) %>% 
-  'colnames<-' (c("strand", "type", "value")) %>%
-  ggplot(data = ., aes(x = value, y = type, fill = strand)) +
-  scale_fill_manual(values = c("T" = "#014666", "U" = "#E42926")) +
-  geom_col(width = 0.8,
-           position = position_dodge(width = 0.9)) +
-  scale_x_continuous(expand = expansion(mult = c(0, 0))) +
-  theme_bw() +
-  theme(axis.text = element_text(size = 3),
-        axis.title = element_blank(),
-        axis.ticks = element_blank(),
-        panel.border = element_blank(),
-        axis.line = element_line(colour = "black", linewidth = 0.1),
-        panel.grid = element_blank(),
-        legend.position = "none",
-        plot.margin = margin(0,0,0,0))
-
-plot1 <- p1 + p12 + plot_layout(width = c(1, 0.3))
-plot2 <- p2 + p22 + plot_layout(width = c(1, 0.3))
-
-uc10 <- plot1 / plot2 +
-  plot_layout(heights = c(1, 1))
-
-## UC11 
-
-p1 <- plotSBS(df = data.frame(MutationType = ds_sbs96$MutationType, 
-                              value = ds_sbs96$UC11T), 
-              x.label = NULL, y.label = "T", strip.size = 4) +
-  theme(plot.margin = margin(0, 0, 0, 0),
-        axis.text.x = element_text(size = 1.5),
-        axis.ticks.x = element_blank(),
-        axis.title.x = element_blank(),
-        axis.text.y = element_blank(),
-        axis.title.y = element_text(size = 6),
-        axis.ticks.y = element_blank())
-
-p12 <- ds_sbs192_collapsed_sbs6 %>% dplyr::select(strand, type, UC11T) %>% 
-  'colnames<-' (c("strand", "type", "value")) %>%
-  ggplot(data = ., aes(x = value, y = type, fill = strand)) +
-  scale_fill_manual(values = c("T" = "#014666", "U" = "#E42926")) +
-  geom_col(width = 0.8,
-           position = position_dodge(width = 0.9)) +
-  scale_x_continuous(expand = expansion(mult = c(0, 0))) +
-  theme_bw() +
-  theme(axis.text = element_text(size = 3),
-        axis.title = element_blank(),
-        axis.ticks = element_blank(),
-        panel.grid = element_blank(),
-        panel.border = element_blank(),
-        axis.line = element_line(colour = "black", linewidth = 0.1),
-        legend.position = "none",
-        plot.margin = margin(0,0,0,0))
-p12
-
-p2 <- plotSBSnostrip(df = data.frame(MutationType = ds_sbs96$MutationType, 
-                                     value = ds_sbs96$UC11N), 
-              x.label = "UC11", y.label = "AN", strip.color = "transparent", strip.size = 0) +
-  theme(axis.ticks.y = element_blank(),
-        axis.text.y = element_blank(),
-        axis.title.y = element_text(size = 6),
-        axis.title.x = element_text(size = 6),
-        axis.text.x = element_text(size = 1.5),
-        plot.margin = margin(0, 0, 0, 0))
-
-p22 <- ds_sbs192_collapsed_sbs6 %>% dplyr::select(strand, type, UC11AN) %>% 
-  'colnames<-' (c("strand", "type", "value")) %>%
-  ggplot(data = ., aes(x = value, y = type, fill = strand)) +
-  scale_fill_manual(values = c("T" = "#014666", "U" = "#E42926")) +
-  geom_col(width = 0.8,
-           position = position_dodge(width = 0.9)) +
-  scale_x_continuous(expand = expansion(mult = c(0, 0))) +
-  theme_bw() +
-  theme(axis.text = element_text(size = 3),
-        axis.title = element_blank(),
-        axis.ticks = element_blank(),
-        panel.border = element_blank(),
-        axis.line = element_line(colour = "black", linewidth = 0.1),
-        panel.grid = element_blank(),
-        legend.position = "none",
-        plot.margin = margin(0,0,0,0))
-
-plot1 <- p1 + p12 + plot_layout(width = c(1, 0.3))
-plot2 <- p2 + p22 + plot_layout(width = c(1, 0.3))
-
-uc11 <- plot1 / plot2 +
-  plot_layout(heights = c(1, 1))
-
-## UC13
-
-p1 <- plotSBS(df = data.frame(MutationType = ds_sbs96$MutationType, 
-                              value = ds_sbs96$UC13T), 
-              x.label = NULL, y.label = "T", strip.size = 4) +
-  theme(plot.margin = margin(0, 0, 0, 0),
-        axis.text.x = element_text(size = 1.5),
-        axis.ticks.x = element_blank(),
-        axis.title.x = element_blank(),
-        axis.text.y = element_blank(),
-        axis.title.y = element_text(size = 6),
-        axis.ticks.y = element_blank())
-
-p12 <- ds_sbs192_collapsed_sbs6 %>% dplyr::select(strand, type, UC13T) %>% 
-  'colnames<-' (c("strand", "type", "value")) %>%
-  ggplot(data = ., aes(x = value, y = type, fill = strand)) +
-  scale_fill_manual(values = c("T" = "#014666", "U" = "#E42926")) +
-  geom_col(width = 0.8,
-           position = position_dodge(width = 0.9)) +
-  scale_x_continuous(expand = expansion(mult = c(0, 0))) +
-  theme_bw() +
-  theme(axis.text = element_text(size = 3),
-        axis.title = element_blank(),
-        axis.ticks = element_blank(),
-        panel.grid = element_blank(),
-        panel.border = element_blank(),
-        axis.line = element_line(colour = "black", linewidth = 0.1),
-        legend.position = "none",
-        plot.margin = margin(0,0,0,0))
-p12
-
-p2 <- plotSBSnostrip(df = data.frame(MutationType = ds_sbs96$MutationType, 
-                                     value = ds_sbs96$UC13N), 
-              x.label = "UC13", y.label = "AN", strip.color = "transparent", strip.size = 0) +
-  theme(axis.ticks.y = element_blank(),
-        axis.text.y = element_blank(),
-        axis.title.y = element_text(size = 6),
-        axis.title.x = element_text(size = 6),
-        axis.text.x = element_text(size = 1.5),
-        plot.margin = margin(0, 0, 0, 0))
-
-p22 <- ds_sbs192_collapsed_sbs6 %>% dplyr::select(strand, type, UC13AN) %>% 
-  'colnames<-' (c("strand", "type", "value")) %>%
-  ggplot(data = ., aes(x = value, y = type, fill = strand)) +
-  scale_fill_manual(values = c("T" = "#014666", "U" = "#E42926")) +
-  geom_col(width = 0.8,
-           position = position_dodge(width = 0.9)) +
-  scale_x_continuous(expand = expansion(mult = c(0, 0))) +
-  theme_bw() +
-  theme(axis.text = element_text(size = 3),
-        axis.title = element_blank(),
-        axis.ticks = element_blank(),
-        panel.border = element_blank(),
-        axis.line = element_line(colour = "black", linewidth = 0.1),
-        panel.grid = element_blank(),
-        legend.position = "none",
-        plot.margin = margin(0,0,0,0))
-
-plot1 <- p1 + p12 + plot_layout(width = c(1, 0.3))
-plot2 <- p2 + p22 + plot_layout(width = c(1, 0.3))
-
-uc13 <- plot1 / plot2 +
-  plot_layout(heights = c(1, 1))
-
-## UC14
-
-p1 <- plotSBS(df = data.frame(MutationType = ds_sbs96$MutationType, 
-                              value = ds_sbs96$UC14T), 
-              x.label = NULL, y.label = "T", strip.size = 4) +
-  theme(plot.margin = margin(0, 0, 0, 0),
-        axis.text.x = element_text(size = 1.5),
-        axis.ticks.x = element_blank(),
-        axis.title.x = element_blank(),
-        axis.text.y = element_blank(),
-        axis.title.y = element_text(size = 6),
-        axis.ticks.y = element_blank())
-
-p12 <- ds_sbs192_collapsed_sbs6 %>% dplyr::select(strand, type, UC14T) %>% 
-  'colnames<-' (c("strand", "type", "value")) %>%
-  ggplot(data = ., aes(x = value, y = type, fill = strand)) +
-  scale_fill_manual(values = c("T" = "#014666", "U" = "#E42926")) +
-  geom_col(width = 0.8,
-           position = position_dodge(width = 0.9)) +
-  scale_x_continuous(expand = expansion(mult = c(0, 0))) +
-  theme_bw() +
-  theme(axis.text = element_text(size = 3),
-        axis.title = element_blank(),
-        axis.ticks = element_blank(),
-        panel.grid = element_blank(),
-        panel.border = element_blank(),
-        axis.line = element_line(colour = "black", linewidth = 0.1),
-        legend.position = "none",
-        plot.margin = margin(0,0,0,0))
-p12
-
-p2 <- plotSBSnostrip(df = data.frame(MutationType = ds_sbs96$MutationType, 
-                                     value = ds_sbs96$UC14N), 
-              x.label = "UC14", y.label = "AN", strip.color = "transparent", strip.size = 0) +
-  theme(axis.ticks.y = element_blank(),
-        axis.text.y = element_blank(),
-        axis.title.y = element_text(size = 6),
-        axis.title.x = element_text(size = 6),
-        axis.text.x = element_text(size = 1.5),
-        plot.margin = margin(0, 0, 0, 0))
-
-p22 <- ds_sbs192_collapsed_sbs6 %>% dplyr::select(strand, type, UC14AN) %>% 
-  'colnames<-' (c("strand", "type", "value")) %>%
-  ggplot(data = ., aes(x = value, y = type, fill = strand)) +
-  scale_fill_manual(values = c("T" = "#014666", "U" = "#E42926")) +
-  geom_col(width = 0.8,
-           position = position_dodge(width = 0.9)) +
-  scale_x_continuous(expand = expansion(mult = c(0, 0))) +
-  theme_bw() +
-  theme(axis.text = element_text(size = 3),
-        axis.title = element_blank(),
-        axis.ticks = element_blank(),
-        panel.border = element_blank(),
-        axis.line = element_line(colour = "black", linewidth = 0.1),
-        panel.grid = element_blank(),
-        legend.position = "none",
-        plot.margin = margin(0,0,0,0))
-
-plot1 <- p1 + p12 + plot_layout(width = c(1, 0.3))
-plot2 <- p2 + p22 + plot_layout(width = c(1, 0.3))
-
-uc14 <- plot1 / plot2 +
-  plot_layout(heights = c(1, 1))
-
-## UC18
-
-p1 <- plotSBS(df = data.frame(MutationType = ds_sbs96$MutationType, 
-                              value = ds_sbs96$UC18T), 
-              x.label = NULL, y.label = "T", strip.size = 4) +
-  theme(plot.margin = margin(0, 0, 0, 0),
-        axis.text.x = element_text(size = 1.5),
-        axis.ticks.x = element_blank(),
-        axis.title.x = element_blank(),
-        axis.text.y = element_blank(),
-        axis.title.y = element_text(size = 6),
-        axis.ticks.y = element_blank())
-
-p12 <- ds_sbs192_collapsed_sbs6 %>% dplyr::select(strand, type, UC18T) %>% 
-  'colnames<-' (c("strand", "type", "value")) %>%
-  ggplot(data = ., aes(x = value, y = type, fill = strand)) +
-  scale_fill_manual(values = c("T" = "#014666", "U" = "#E42926")) +
-  geom_col(width = 0.8,
-           position = position_dodge(width = 0.9)) +
-  scale_x_continuous(expand = expansion(mult = c(0, 0))) +
-  theme_bw() +
-  theme(axis.text = element_text(size = 3),
-        axis.title = element_blank(),
-        axis.ticks = element_blank(),
-        panel.grid = element_blank(),
-        panel.border = element_blank(),
-        axis.line = element_line(colour = "black", linewidth = 0.1),
-        legend.position = "none",
-        plot.margin = margin(0,0,0,0))
-p12
-
-p2 <- plotSBSnostrip(df = data.frame(MutationType = ds_sbs96$MutationType, 
-                                     value = ds_sbs96$UC18N), 
-              x.label = "UC18", y.label = "AN", strip.color = "transparent", strip.size = 0) +
-  theme(axis.ticks.y = element_blank(),
-        axis.text.y = element_blank(),
-        axis.title.y = element_text(size = 6),
-        axis.title.x = element_text(size = 6),
-        axis.text.x = element_text(size = 1.5),
-        plot.margin = margin(0, 0, 0, 0))
-
-p22 <- ds_sbs192_collapsed_sbs6 %>% dplyr::select(strand, type, UC18AN) %>% 
-  'colnames<-' (c("strand", "type", "value")) %>%
-  ggplot(data = ., aes(x = value, y = type, fill = strand)) +
-  scale_fill_manual(values = c("T" = "#014666", "U" = "#E42926")) +
-  geom_col(width = 0.8,
-           position = position_dodge(width = 0.9)) +
-  scale_x_continuous(expand = expansion(mult = c(0, 0))) +
-  theme_bw() +
-  theme(axis.text = element_text(size = 3),
-        axis.title = element_blank(),
-        axis.ticks = element_blank(),
-        panel.border = element_blank(),
-        axis.line = element_line(colour = "black", linewidth = 0.1),
-        panel.grid = element_blank(),
-        legend.position = "none",
-        plot.margin = margin(0,0,0,0))
-
-plot1 <- p1 + p12 + plot_layout(width = c(1, 0.3))
-plot2 <- p2 + p22 + plot_layout(width = c(1, 0.3))
-
-uc18 <- plot1 / plot2 +
-  plot_layout(heights = c(1, 1))
-
-## UC19
-
-p1 <- plotSBS(df = data.frame(MutationType = ds_sbs96$MutationType, 
-                              value = ds_sbs96$UC19T), 
-              x.label = NULL, y.label = "T", strip.size = 4) +
-  theme(plot.margin = margin(0, 0, 0, 0),
-        axis.text.x = element_text(size = 1.5),
-        axis.ticks.x = element_blank(),
-        axis.title.x = element_blank(),
-        axis.text.y = element_blank(),
-        axis.title.y = element_text(size = 6),
-        axis.ticks.y = element_blank())
-
-p12 <- ds_sbs192_collapsed_sbs6 %>% dplyr::select(strand, type, UC19T) %>% 
-  'colnames<-' (c("strand", "type", "value")) %>%
-  ggplot(data = ., aes(x = value, y = type, fill = strand)) +
-  scale_fill_manual(values = c("T" = "#014666", "U" = "#E42926")) +
-  geom_col(width = 0.8,
-           position = position_dodge(width = 0.9)) +
-  scale_x_continuous(expand = expansion(mult = c(0, 0))) +
-  theme_bw() +
-  theme(axis.text = element_text(size = 3),
-        axis.title = element_blank(),
-        axis.ticks = element_blank(),
-        panel.grid = element_blank(),
-        panel.border = element_blank(),
-        axis.line = element_line(colour = "black", linewidth = 0.1),
-        legend.position = "none",
-        plot.margin = margin(0,0,0,0))
-p12
-
-p2 <- plotSBSnostrip(df = data.frame(MutationType = ds_sbs96$MutationType, 
-                                     value = ds_sbs96$UC19N), 
-              x.label = "UC19", y.label = "AN", strip.color = "transparent", strip.size = 0) +
-  theme(axis.ticks.y = element_blank(),
-        axis.text.y = element_blank(),
-        axis.title.y = element_text(size = 6),
-        axis.title.x = element_text(size = 6),
-        axis.text.x = element_text(size = 1.5),
-        plot.margin = margin(0, 0, 0, 0))
-
-p22 <- ds_sbs192_collapsed_sbs6 %>% dplyr::select(strand, type, UC19AN) %>% 
-  'colnames<-' (c("strand", "type", "value")) %>%
-  ggplot(data = ., aes(x = value, y = type, fill = strand)) +
-  scale_fill_manual(values = c("T" = "#014666", "U" = "#E42926")) +
-  geom_col(width = 0.8,
-           position = position_dodge(width = 0.9)) +
-  scale_x_continuous(expand = expansion(mult = c(0, 0))) +
-  theme_bw() +
-  theme(axis.text = element_text(size = 3),
-        axis.title = element_blank(),
-        axis.ticks = element_blank(),
-        panel.border = element_blank(),
-        axis.line = element_line(colour = "black", linewidth = 0.1),
-        panel.grid = element_blank(),
-        legend.position = "none",
-        plot.margin = margin(0,0,0,0))
-
-plot1 <- p1 + p12 + plot_layout(width = c(1, 0.3))
-plot2 <- p2 + p22 + plot_layout(width = c(1, 0.3))
-
-uc19 <- plot1 / plot2 +
-  plot_layout(heights = c(1, 1))
-
-## UC26
-
-p1 <- plotSBS(df = data.frame(MutationType = ds_sbs96$MutationType, 
-                              value = ds_sbs96$UC26T), 
-              x.label = NULL, y.label = "T", strip.size = 4) +
-  theme(plot.margin = margin(0, 0, 0, 0),
-        axis.text.x = element_text(size = 1.5),
-        axis.ticks.x = element_blank(),
-        axis.title.x = element_blank(),
-        axis.text.y = element_blank(),
-        axis.title.y = element_text(size = 6),
-        axis.ticks.y = element_blank())
-
-p12 <- ds_sbs192_collapsed_sbs6 %>% dplyr::select(strand, type, UC26T) %>% 
-  'colnames<-' (c("strand", "type", "value")) %>%
-  ggplot(data = ., aes(x = value, y = type, fill = strand)) +
-  scale_fill_manual(values = c("T" = "#014666", "U" = "#E42926")) +
-  geom_col(width = 0.8,
-           position = position_dodge(width = 0.9)) +
-  scale_x_continuous(expand = expansion(mult = c(0, 0))) +
-  theme_bw() +
-  theme(axis.text = element_text(size = 3),
-        axis.title = element_blank(),
-        axis.ticks = element_blank(),
-        panel.grid = element_blank(),
-        panel.border = element_blank(),
-        axis.line = element_line(colour = "black", linewidth = 0.1),
-        legend.position = "none",
-        plot.margin = margin(0,0,0,0))
-p12
-
-p2 <- plotSBSnostrip(df = data.frame(MutationType = ds_sbs96$MutationType, 
-                                     value = ds_sbs96$UC26N), 
-              x.label = "UC26", y.label = "AN", strip.color = "transparent", strip.size = 0) +
-  theme(axis.ticks.y = element_blank(),
-        axis.text.y = element_blank(),
-        axis.title.y = element_text(size = 6),
-        axis.title.x = element_text(size = 6),
-        axis.text.x = element_text(size = 1.5),
-        plot.margin = margin(0, 0, 0, 0))
-
-p22 <- ds_sbs192_collapsed_sbs6 %>% dplyr::select(strand, type, UC26AN) %>% 
-  'colnames<-' (c("strand", "type", "value")) %>%
-  ggplot(data = ., aes(x = value, y = type, fill = strand)) +
-  scale_fill_manual(values = c("T" = "#014666", "U" = "#E42926")) +
-  geom_col(width = 0.8,
-           position = position_dodge(width = 0.9)) +
-  scale_x_continuous(expand = expansion(mult = c(0, 0))) +
-  theme_bw() +
-  theme(axis.text = element_text(size = 3),
-        axis.title = element_blank(),
-        axis.ticks = element_blank(),
-        panel.border = element_blank(),
-        axis.line = element_line(colour = "black", linewidth = 0.1),
-        panel.grid = element_blank(),
-        legend.position = "none",
-        plot.margin = margin(0,0,0,0))
-
-plot1 <- p1 + p12 + plot_layout(width = c(1, 0.3))
-plot2 <- p2 + p22 + plot_layout(width = c(1, 0.3))
-
-uc26 <- plot1 / plot2 +
-  plot_layout(heights = c(1, 1))
-
-## UC34
-
-p1 <- plotSBS(df = data.frame(MutationType = ds_sbs96$MutationType, 
-                              value = ds_sbs96$UC34T), 
-              x.label = NULL, y.label = "T", strip.size = 4) +
-  theme(plot.margin = margin(0, 0, 0, 0),
-        axis.text.x = element_text(size = 1.5),
-        axis.ticks.x = element_blank(),
-        axis.title.x = element_blank(),
-        axis.text.y = element_blank(),
-        axis.title.y = element_text(size = 6),
-        axis.ticks.y = element_blank())
-
-p12 <- ds_sbs192_collapsed_sbs6 %>% dplyr::select(strand, type, UC34T) %>% 
-  'colnames<-' (c("strand", "type", "value")) %>%
-  ggplot(data = ., aes(x = value, y = type, fill = strand)) +
-  scale_fill_manual(values = c("T" = "#014666", "U" = "#E42926")) +
-  geom_col(width = 0.8,
-           position = position_dodge(width = 0.9)) +
-  scale_x_continuous(expand = expansion(mult = c(0, 0))) +
-  theme_bw() +
-  theme(axis.text = element_text(size = 3),
-        axis.title = element_blank(),
-        axis.ticks = element_blank(),
-        panel.grid = element_blank(),
-        panel.border = element_blank(),
-        axis.line = element_line(colour = "black", linewidth = 0.1),
-        legend.position = "none",
-        plot.margin = margin(0,0,0,0))
-p12
-
-p2 <- plotSBSnostrip(df = data.frame(MutationType = ds_sbs96$MutationType, 
-                                     value = ds_sbs96$UC34N), 
-              x.label = "UC34", y.label = "AN", strip.color = "transparent", strip.size = 0) +
-  theme(axis.ticks.y = element_blank(),
-        axis.text.y = element_blank(),
-        axis.title.y = element_text(size = 6),
-        axis.title.x = element_text(size = 6),
-        axis.text.x = element_text(size = 1.5),
-        plot.margin = margin(0, 0, 0, 0))
-
-p22 <- ds_sbs192_collapsed_sbs6 %>% dplyr::select(strand, type, UC34AN) %>% 
-  'colnames<-' (c("strand", "type", "value")) %>%
-  ggplot(data = ., aes(x = value, y = type, fill = strand)) +
-  scale_fill_manual(values = c("T" = "#014666", "U" = "#E42926")) +
-  geom_col(width = 0.8,
-           position = position_dodge(width = 0.9)) +
-  scale_x_continuous(expand = expansion(mult = c(0, 0))) +
-  theme_bw() +
-  theme(axis.text = element_text(size = 3),
-        axis.title = element_blank(),
-        axis.ticks = element_blank(),
-        panel.border = element_blank(),
-        axis.line = element_line(colour = "black", linewidth = 0.1),
-        panel.grid = element_blank(),
-        legend.position = "none",
-        plot.margin = margin(0,0,0,0))
-
-plot1 <- p1 + p12 + plot_layout(width = c(1, 0.3))
-plot2 <- p2 + p22 + plot_layout(width = c(1, 0.3))
-
-uc34 <- plot1 / plot2 +
-  plot_layout(heights = c(1, 1))
+mut.order <- c("C>A", "C>G", "C>T", "T>A", "T>C", "T>G")
+
+mut.color <- c('deepskyblue','black','red','lightgrey','yellowgreen','pink')
+names(mut.color) <- mut.order
+
+plotSBS6dual <- function(id) {
+  sampname <- as.character(id)
+  samp_col <- which(names(ds_sbs192_collapsed_sbs6) == sampname)
+  df1 <- data.frame(MutationType = ds_sbs192_collapsed_sbs6$type, 
+                    strand = ds_sbs192_collapsed_sbs6$strand,
+                    value = ds_sbs192_collapsed_sbs6[,samp_col]) %>%
+    'colnames<-' (c("MutationType", "strand", "value"))
+  df1$propvalue <- df1$value / sum(df1$value)
+  df1$MutationType <- factor(x = df1$MutationType, levels = mut.order)
+  df1$strand <- factor(x = df1$strand, levels = c("U", "T"))
+  
+  df1$strandbias <- unlist(parallel::mclapply(X = as.list(unique(df1$MutationType)), FUN = function(x) {
+    t <- df1 %>% dplyr::filter(MutationType %in% all_of(x),
+                               strand == "T") %>%
+      pull(value)
+    u <- df1 %>% dplyr::filter(MutationType %in% all_of(x),
+                               strand == "U") %>% 
+      pull(value)
+    if(t == 0 & u == 0) {
+      t <- 1
+      u <- 1
+      pval <- -log10(1)
+      } else {
+        pval <- -log10(binom.test(x = t, n = t+u, p = 0.5, alternative = "two.sided")$p.value)
+        }
+    return(pval)
+    }, mc.cores = 10))
+  
+  pval_df <- df1 %>% dplyr::select(MutationType, strandbias) %>% distinct()
+  pval_df$stars <- dplyr::case_when(pval_df$strandbias >= 4 ~ "****",
+                                    pval_df$strandbias >= 3 ~ "***",
+                                    pval_df$strandbias >= 2 ~ "**",
+                                    pval_df$strandbias >= 1.30103 ~ "*",
+                                    TRUE ~ "")
+  
+  # scaling factor between SBS counts and -log10(p)
+  scale_factor <- max(df1$propvalue) / max(pval_df$strandbias)
+  
+  p1 <- ggplot(df1, aes(x = MutationType, y = propvalue, fill = MutationType)) +
+    geom_bar(aes(group = strand),
+             stat = "identity", 
+             position = position_dodge(width = 0.8),
+             width = 0.7,
+             color = "black") +
+    scale_fill_manual(values = mut.color) +
+    scale_x_discrete(labels = c("C>A" = "N T",
+        "C>G" = "N T",
+        "C>T" = "N T",
+        "T>A" = "N T",
+        "T>C" = "N T",
+        "T>G" = "N T")) +
+    geom_line(data = pval_df,
+              aes(x = MutationType, y = strandbias * scale_factor, group = 1),
+              linetype = "dashed",
+              linewidth = 0.3,
+              color = "grey30") +
+    scale_y_continuous(
+      name = "SBS Contribution (%)",
+      expand = expansion(mult = c(0.05, 0.125)),
+      sec.axis = sec_axis(
+        ~ . / scale_factor,
+        name = expression("-log"[10]*"(p)")
+      )) +
+    geom_text(data = subset(pval_df, stars != ""),
+              aes(x = MutationType, y = strandbias * scale_factor, 
+                  label = stars),
+              vjust = 0, size = 1.8, 
+              color = "firebrick3") +
+    ggtitle(sampname) +
+    theme_bw() +
+    theme(axis.ticks.x = element_blank(),
+          panel.grid = element_blank(),
+          axis.text = element_text(size = 6),
+          plot.title = element_text(size = 6, hjust = 0.5, margin = margin(t=0, b=0)),
+          axis.title.y = element_text(size = 6),
+          axis.title.x =  element_blank(),
+          legend.position = "none")
+  return(p1)
+}
+
+p1 <- plotSBS6dual(id = "UC2T")
+p2 <- plotSBS6dual(id = "UC2AN")
+p3 <- plotSBS6dual(id = "UC4T")
+p4 <- plotSBS6dual(id = "UC4DN")
+p5 <- plotSBS6dual(id = "UC5T")
+p6 <- plotSBS6dual(id = "UC5AN")
+p7 <- plotSBS6dual(id = "UC7T")
+p9 <- plotSBS6dual(id = "UC7DN")
+p10 <- plotSBS6dual(id = "UC10T")
+p11 <- plotSBS6dual(id = "UC10AN")
+p12 <- plotSBS6dual(id = "UC11T")
+p13 <- plotSBS6dual(id = "UC11AN")
+p14 <- plotSBS6dual(id = "UC13T")
+p15 <- plotSBS6dual(id = "UC13AN")
+p16 <- plotSBS6dual(id = "UC14T")
+p17 <- plotSBS6dual(id = "UC14AN")
+p18 <- plotSBS6dual(id = "UC18T")
+p19 <- plotSBS6dual(id = "UC18AN")
+p20 <- plotSBS6dual(id = "UC19T")
+p21 <- plotSBS6dual(id = "UC19AN")
+p22 <- plotSBS6dual(id = "UC26T")
+p23 <- plotSBS6dual(id = "UC26AN")
+p24 <- plotSBS6dual(id = "UC34T")
+p25 <- plotSBS6dual(id = "UC34AN")
 ```
 
-
-
 ```{r}
-layout <- "
-AAAABBBB
-AAAABBBB
-CCCCDDDD
-CCCCDDDD
-EEEEFFFF
-EEEEFFFF
-GGGGHHHH
-GGGGHHHH
-IIIIJJJJ
-IIIIJJJJ
-KKKKLLLL
-KKKKLLLL
-ZZZZZZZZ"
+combined_plot1 <- (p1 + p2 + p3) / (p4 + p5 + p6) / (p7 + p9 + p10) / (p11 + p12 + p13) / (p14 + p15 + p16) / (p17 + p18 + p19) / (p20 + p21 + p22) / (p23 + p24 + p25) +  
+  plot_layout(widths = c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1))
 
-dev.off()
+ggsave("/mnt/data1/peter/repo/AAmanu/figure/supplementalfigure4_sbs6dual.png", 
+       width = 170, height = 240,
+       units = "mm", dpi = 600)
 
-
-combined_plot1 <- wrap_elements(uc2) + wrap_elements(uc4) + wrap_elements(uc5) + wrap_elements(uc7) +
-  wrap_elements(uc10) + wrap_elements(uc11) + wrap_elements(uc13) + wrap_elements(uc14) +
-  wrap_elements(uc18) + wrap_elements(uc19) + wrap_elements(uc26) + wrap_elements(uc34) +
-  plot_layout(design=layout) + 
-  plot_annotation(tag_levels = list(c(""))) &
-  theme(plot.tag = element_text(face = 'bold', size = 10,
-                                margin = margin(0, 0, -8, -8)),
-        text = element_text(family = "Arial"),
-        plot.margin = margin(0, 0, 0, 0))
-
-ggsave("/mnt/data1/peter/repo/AAmanu/figure/supplementalfigure4.png", 
-       width = 170, height = 200,
+ggsave("/mnt/data1/peter/repo/AAmanu/figure/for_submission/supplementalfigure4.jpeg", 
+       width = 170, height = 240,
        units = "mm", dpi = 600)
 ```
-

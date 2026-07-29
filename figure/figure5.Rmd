@@ -176,19 +176,20 @@ names(color_anno) <- c("N", "T", "B", "U")
 ## plotting ##
 
 p10 <- ggplot(data = combined_all_clonal, aes(x = type, y = value)) +
-  geom_boxplot(outlier.shape = NA, alpha = 0.5, aes(fill = type)) +
+  geom_boxplot(outlier.shape = NA, aes(fill = type)) +
   geom_jitter(width = 0.15, size = 0.5, color = "black", shape = 21) +
   facet_wrap(.~Mutation) +
   scale_y_continuous(limits = c(-0.05, 1.05),
                      breaks = seq(0, 1, by = 0.25)) +
-  ylab("SBS22a Attribution") +
+  ylab("Relative Attribution") + ggtitle("SBS22a Signature") +
   scale_fill_manual(values = color_anno) +
   theme_bw() +
   theme(axis.title.x = element_blank(),
         axis.title.y = element_text(size = 8),
         axis.text = element_text(size = 6),
         panel.grid = element_blank(),
-        plot.margin = margin(0,5,0,0),
+        plot.margin = margin(0,5,0,5),
+        plot.title = element_text(size = 8, hjust = 0.5),
         strip.text = element_text(size = 8, margin = margin(b=0)),
         strip.background = element_blank(),
         legend.position = "none")
@@ -243,12 +244,12 @@ combined_all_clonal$Mutation <- factor(x = combined_all_clonal$Mutation, levels 
 combined_all_clonal$type <- factor(x = combined_all_clonal$type, levels = c("T", "N","B", "U"))
 
 p11 <- ggplot(data = combined_all_clonal, aes(x = type, y = value)) +
-  geom_boxplot(outlier.shape = NA, alpha = 0.5, aes(fill = type)) +
+  geom_boxplot(outlier.shape = NA, aes(fill = type)) +
   geom_jitter(width = 0.15, size = 0.5, color = "black", shape = 21) +
   facet_wrap(.~Mutation) +
   scale_y_continuous(limits = c(-0.05, 1.05),
                      breaks = seq(0, 1, by = 0.25)) +
-  ylab("Aging Attribution") +
+  ylab("Relative Attribution") + ggtitle("Aging Signatures") +
   scale_fill_manual(values = color_anno) +
   theme_bw() +
   theme(axis.title.x = element_blank(),
@@ -256,6 +257,7 @@ p11 <- ggplot(data = combined_all_clonal, aes(x = type, y = value)) +
         axis.text = element_text(size = 6),
         panel.grid = element_blank(),
         plot.margin = margin(0,5,0,0),
+        plot.title = element_text(size = 8, hjust = 0.5),
         strip.text = element_text(size = 8, margin = margin(b=0)),
         strip.background = element_blank(),
         legend.position = "none")
@@ -915,8 +917,8 @@ combined_plot6 <- (plot_spacer() + p12 + plot_spacer() + p13 + plot_spacer()) +
 
 
 layout <- "
-AAAAAAAA
-AAAAAAAA
+AAAACCCC
+AAAACCCC
 BBBBBBBB
 BBBBBBBB
 BBBBBBBB
@@ -938,13 +940,17 @@ combined_plot <-
   )
 
 set.seed(602)
-combined_plot1 <- free(wrap_elements(combined_plot_boxplot)) + wrap_elements(combined_plot) + plot_layout(design=layout) + 
-  plot_annotation(tag_levels = list(c("A", "B", ""))) &
+combined_plot1 <- free(p10) + wrap_elements(combined_plot) + free(p11) + plot_layout(design=layout) + 
+  plot_annotation(tag_levels = list(c("A", "C", "B"))) &
   theme(plot.tag = element_text(face = 'bold', size = 10, margin = margin(-8, 0,-8,-8)),
         text = element_text(family = "Arial"))
 
 ggsave("/mnt/data1/peter/repo/AAmanu/figure/figure5.png", 
-       width = 170, height = 190,
+       width = 170, height = 210,
+       units = "mm", dpi = 600)
+
+ggsave("/mnt/data1/peter/repo/AAmanu/figure/for_submission/figure5.jpeg", 
+       width = 170, height = 210,
        units = "mm", dpi = 600)
 ```
 

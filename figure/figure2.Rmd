@@ -1333,4 +1333,8 @@ combined_plot1 <- wrap_elements(combined_denovo) + wrap_elements(combined_main) 
 ggsave("/mnt/data1/peter/repo/AAmanu/figure/figure2.png", 
        width = 170, height = 170,
        units = "mm", dpi = 600)
+
+ggsave("/mnt/data1/peter/repo/AAmanu/figure/for_submission/figure2.jpeg", 
+       width = 170, height = 170,
+       units = "mm", dpi = 600)
 ```

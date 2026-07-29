@@ -215,7 +215,7 @@ p1 <- ggplot(data = combined_res, aes(x = value, y = type)) +
     alpha = 0.5) +
   scale_fill_identity() +
   scale_size_continuous(range = c(0.5, 2), guide = "none") +
-  geom_point(aes(color = method, size = value), alpha = 0.5, stroke = 0) +
+  geom_point(aes(color = method, size = value), stroke = 0) + #, alpha = 0.5 remove alpha
   geom_segment(data = seg_df, aes(x = WGS, xend = DS_arrow, 
                                   y = type, yend = type),
                linewidth = 0.25, color = "grey30",
@@ -312,6 +312,10 @@ combined_plot1 <- p20 + p1 + free(p3) + plot_layout(design=layout) + #+ free(p2)
         text = element_text(family = "Arial"))
 
 ggsave("/mnt/data1/peter/repo/AAmanu/figure/figure3.png", 
+       width = 170, height = 170,
+       units = "mm", dpi = 600)
+
+ggsave("/mnt/data1/peter/repo/AAmanu/figure/for_submission/figure3.jpeg", 
        width = 170, height = 170,
        units = "mm", dpi = 600)
 ```

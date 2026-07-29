@@ -213,4 +213,8 @@ combined_plot1 <- wrap_elements(combined_venn) + plot_layout(design=layout) +
 ggsave("/mnt/data1/peter/repo/AAmanu/figure/supplementalfigure8.png", 
        width = 170, height = 170,
        units = "mm", dpi = 600)
+
+ggsave("/mnt/data1/peter/repo/AAmanu/figure/for_submission/supplementalfigure8.jpeg", 
+       width = 170, height = 170,
+       units = "mm", dpi = 600)
 ```

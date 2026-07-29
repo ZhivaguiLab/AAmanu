@@ -175,7 +175,9 @@ p1 <- ggplot(data = all_vaf, aes(x = vaf, fill = hr_type)) +
         strip.background = element_blank(),
         strip.text = element_text(size = 8, face = "bold")
         )
+```
 
+```{r}
 layout <- "
 AAAAAAAA
 AAAAAAAA
@@ -196,6 +198,10 @@ combined_plot1 <- p1 + plot_layout(design=layout) +
         text = element_text(family = "Arial"))
 
 ggsave("/mnt/data1/peter/repo/AAmanu/figure/supplementalfigure1.png", 
+       width = 170, height = 170,
+       units = "mm", dpi = 600)
+
+ggsave("/mnt/data1/peter/repo/AAmanu/figure/for_submission/supplementalfigure1.jpeg", 
        width = 170, height = 170,
        units = "mm", dpi = 600)
 ```

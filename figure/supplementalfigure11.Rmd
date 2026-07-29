@@ -1,5 +1,5 @@
 ---
-title: "supplementalfigure11"
+title: "supplementalfigure9"
 output: html_document
 date: "2026-04-27"
 editor_options: 
@@ -14,237 +14,181 @@ library(SigRescueR)
 library(mSigAct)
 ```
 
-Loading original WGA data, feed into SigRescueR, then SPE, then mSigAct
+Function to plot SBS96
 ```{r}
-# wga <- data.table::fread("/mnt/data1/peter/repo/AAmanu/data/HDP_input_ImmuneCells.csv") %>% as.data.frame() %>%
-#   dplyr::rename("MutationType"="Mutation type") %>%
-#   mutate(MutationType = paste0(substring(Trinucleotide,1,1), "[",
-#                                MutationType,
-#                                "]", substring(Trinucleotide,3,3))) %>%
-#   dplyr::select(-Trinucleotide)
-
-# write.table(wga, file = "/mnt/storage/peter/repo/manuAA/data/wga_uc_bloodfraction.txt",
-#             row.names = FALSE, quote = FALSE, sep = "\t")
-
-## Cleaned PBMC samples with WGA cell line data
-# Rscript /mnt/storage/peter/repo/manuAA/code/othercode/wga_bloodfraction_sr_wga.R
-
-## Load SR data and process
-# load("/mnt/data1/peter/repo/AAmanu/data/SigRescueR/wga_bloodfraction_sr_wga.rda")
-# SigRescueR::SigRescueAnalyze(res = res)
-# SigRescueR::SigRescuePlot(res = res, context = "96", 
-#                           output_path = "/mnt/storage/peter/repo/manuAA/data/wga_bf_sr_wga/",
-#                           filename = "wga_bf_sr_wga")
-# samp.cleaned <- samp.cleaned %>% mutate(across(where(is.numeric), \(x) round(x, 0)))
-# write.table(samp.cleaned, file = "/mnt/storage/peter/repo/manuAA/data/wga_bf_sr_wga/wga_uc_bloodfraction.txt",
-#             row.names = FALSE, quote = FALSE, sep = "\t")
-
-## Run SPE
-# python /mnt/storage/peter/repo/manuAA/code/othercode/spe_wga_bloodfraction_uc_sbs.py
-
-# load reference signatures (SPE results)
-ref.sigs <- ICAMS::ReadCatalog("/mnt/data1/peter/repo/AAmanu/data/spe//wga_uc_bloodfraction_sbs/SBS96/Suggested_Solution/COSMIC_SBS96_Decomposed_Solution/Signatures/COSMIC_SBS96_Signatures.txt")
-ref.sigs <- ICAMS::as.catalog(ref.sigs,
-                              ref.genome = "GRCh38",
-                              region = "genome",
-                              catalog.type = "counts.signature")
-
-prior.sigs <- colnames(ref.sigs)
-
-input_file <- "/mnt/data1/peter/repo/AAmanu/data/wga_uc_bloodfraction.txt"
-input_catalog <- ICAMS::ReadCatalog(file = input_file)
-
-sparseAssign <- SparseAssignActivity(spectra = input_catalog,
-                                     sigs = ref.sigs[,prior.sigs],
-                                     max.level = length(prior.sigs)-1,
-                                     p.thresh = 0.05/length(prior.sigs),
-                                     num.parallel.samples = 5,
-                                     mc.cores.per.sample = 20,
-                                     drop.low.mut.samples = FALSE,
-                                     seed = 425,
-                                     output.dir = "/mnt/data1/peter/repo/AAmanu/data/mSigAct/wga_uc_cosmic_srWGA")
-
-# save(sparseAssign, file = "/mnt/data1/peter/repo/AAmanu/data/mSigAct/wga_uc_cosmic_srWGA.rda")
-```
-
-Load mSigAct signature attribution and prep for enrichment analysis
-```{r}
-load("/mnt/data1/peter/repo/AAmanu/data/mSigAct/wga_uc_cosmic_srWGA.rda")
-
-## Signature attribution result
-mSigAct_pd <- sparseAssign$proposed.assignment %>% t() %>% as.data.frame() %>%
-  'rownames<-' (gsub(pattern = "PBMC::", replacement = "", x = rownames(.))) %>%
-  'rownames<-' (gsub(pattern = "-cell", replacement = "", x = rownames(.))) %>%
-  dplyr::filter(!grepl("WGA", rownames(.))) %>%
-  sweep(1, rowSums(.), "/") %>%
-  mutate(across(everything(), ~ ifelse(is.na(.), 0, .))) %>%
-  rownames_to_column(var = "Samples") %>% 
-  gather(data = ., key = "signatures", value = "value", -Samples) %>%
-  mutate(group = paste0("UC", as.numeric(str_extract(Samples, "\\d+"))),
-         type = gsub(pattern = "^[^_]*_", replacement = "", x = Samples)) %>%
-  mutate(type = ifelse(type == "myeloid_1", "Myeloid_1", type)) %>%
-  mutate(type = gsub(pattern = "\\_", replacement = "", x = type)) %>%
-  mutate(type = gsub(pattern = "Myeloid", replacement = "M", x = type))
-
-## Factor level
-sample.order <- c("UC2", "UC4", "UC5", "UC7", "UC10", "UC11", "UC13", "UC14", "UC18", "UC19", "UC26", "UC34")
-mSigAct_pd$group <- factor(x = mSigAct_pd$group, levels = sample.order)
-mSigAct_pd$type <- factor(x = mSigAct_pd$type, 
-                        levels = c("B1", "B2", "B5", "T1", "T2", "T3", "T4", "T4b", "T6", "T7", "NK1", "NK2", "NK3", 
-                                   "M1", "M2"))
-mSigAct_pd$signatures <- factor(x = mSigAct_pd$signatures, 
-                                levels = c("SBS1",  "SBS5", "SBS22a", "SBS36", "SBS45", "SBS95"))
-
-## create batchPch column to indicate batches. 
-mSigAct_pd$batchPch<-NA
-mSigAct_pd$batchPch[grep("UC4_|UC5_|UC7_|UC14_T-cell_4",mSigAct_pd$Samples)]<- "Batch1"
-mSigAct_pd$batchPch[grepl("UC14_",mSigAct_pd$Samples) & !mSigAct_pd$Samples == "UC14_T-cell_4"]<- "Batch2"
-mSigAct_pd$batchPch[grep("UC18_|UC34_",mSigAct_pd$Samples)]<- "Batch3"
-
-mSigAct_pd <- mSigAct_pd %>% mutate(celltype = case_when(grepl("T", type) ~ "T-cell",
-                                                         grepl("B", type) ~ "B-cell",
-                                                         grepl("NK", type) ~ "NK-cell",
-                                                         grepl("M", type) ~ "Myeloid"))
-
-## Factor order
-mSigAct_pd$celltype <- factor(x = mSigAct_pd$celltype, levels = c("B-cell", "T-cell", "NK-cell", "Myeloid"))
-```
-
-Enrichment analysis for batch using fishers test
-```{r}
-batch <- unique(mSigAct_pd$batchPch) ## Batches
-signatures <- unique(as.character(mSigAct_pd$signatures)) ## Signatures
-
-# Haldane–Anscombe correction
-ha_or <- function(tab) {
-  stopifnot(all(dim(tab) == c(2, 2)))
-  tab <- tab + 0.5 ## Add 0.5 to account for zero cell count
-
-  or <- (tab[2,2] * tab[1,1]) /
-        (tab[2,1] * tab[1,2])
-
-  return(or)
+## Get SBS order
+getSBSorder <- function() {
+  counter <- 1
+  df <- as.data.frame(matrix(data = NA, nrow = 96, ncol = 3))
+  all_bp <- c("A", "C", "G", "T")
+  pyr_muts <- c("C>A", "C>G", "C>T", "T>A", "T>C", "T>G")
+  for(m in pyr_muts){
+    for(a in all_bp){
+      for(b in all_bp){
+        df[counter,1] <- paste(a, "[",m, "]", b, sep="")
+        df[counter,2] <- m
+        df[counter,3] <- paste(a, substring(m,1,1),b, sep="")
+        counter <- counter + 1 ## Add counter for next row
+      }
+    }
   }
-
-## For loop to perform fishers test for enrichment between batch and background for a signature
-res <- list()
-
-for (b in batch) {
-  for(s in signatures) {
-    sel_df <- mSigAct_pd %>% dplyr::filter(signatures == s) %>%
-      mutate(status = ifelse(value > 0.05, 1, 0),
-             obsBatch = ifelse(batchPch == b, 1, 0))
-    tab <- table(sel_df$obsBatch,
-                 sel_df$status)
-    ft <- fisher.test(tab)
-    
-    or_ha <- ha_or(tab)
-  
-    case <- paste(b, s, sep = "_")
-    
-    res[[case]] <- data.frame(
-      Batch = b,
-      Signatures = s,
-      odds_ratio = unname(ft$estimate),
-      or_ha = or_ha,
-      lower_CI = ft$conf.int[1],
-      upper_CI = ft$conf.int[2],
-      p_value = ft$p.value)
-  }
+  return(df)
 }
 
-res <- as.data.frame(do.call(rbind, res))
-res$FDR <- p.adjust(res$p_value, method = "BH") ## FDR 
-```
+sbs.df <- getSBSorder()
 
-Plotting results
-```{r}
-xmin <- 1e-4 ## left side minimum xlimit (0's CI don't work)
-xmax <- 10000 ## Right side maximum xlimit (because some go to INF)
+## Mutation context colors
+mut.color <- c('deepskyblue','black','red','lightgrey','yellowgreen','pink')
 
-plot_df <- res %>%
-  mutate(
-    OR_plot = or_ha, 
-    upper_plot = pmin(upper_CI, xmax), ## If greater than xmax then set to xmax
-    inf = is.infinite(upper_CI)
-  )
-
-plot_df$lower_CI[plot_df$lower_CI == 0] <- xmin  # 0 to 1e-4 so doesnt get affected by log10 transformation
-
-## Factor order
-plot_df$Signatures <- factor(x = plot_df$Signatures, 
-                             levels = rev(c("SBS1", "SBS5", "SBS22a", "SBS36", "SBS45", "SBS95")))
-
-p2 <- ggplot(plot_df, aes(x = OR_plot, y = Signatures)) +
-  geom_errorbarh(aes(xmin = lower_CI,
-                     xmax = upper_plot),
-                 height = 0.2,
-                 linewidth = 0.25) +
-  geom_point(size = 0.5) +
-  facet_wrap(.~Batch) +
-  scale_x_log10(breaks = 10^(-4:4), labels = -4:4) +
-  geom_vline(xintercept = 1, linetype = 2, colour = "grey50", linewidth = 0.25) +
-  ## Arrow for infinite CI
-  geom_segment(
-    data = subset(plot_df, inf),
-    aes(x = xmax * 0.8,
-        xend = xmax * 0.85,
-        y = Signatures,
-        yend = Signatures),
-    arrow = arrow(type = "closed",
-                  length = unit(0.1, "cm")),
-    inherit.aes = FALSE) +
-  xlab(expression("log"[10]*"(OR)")) +
+## Function to plot SBS96 with alphas
+plotSBS.multialpha <- function(df, estimated_bg, x.label, alpha = 1) {
+  df.pd <- df %>% left_join(x = ., y = sbs.df, by = c("MutationType"="V1"))
+  df.pd$MutationType <- factor(x = df.pd$MutationType, levels = sbs.df$V1)
+  
+  anno <- df.pd %>% dplyr::filter(V2 == "T>G") %>%
+    mutate(x = Inf,
+           y = Inf,
+           label = paste0("SBS31: ", round(estimated_bg*100, digits = 1), "%"))
+  
+  p1 <- ggplot(data = df.pd, aes(x = MutationType, y = value/sum(value)*100)) +
+  geom_col(aes(fill = V2, alpha = status)) +
   theme_bw() +
-  theme(axis.title.x = element_text(size = 8),
-        axis.title.y = element_blank(),
-        axis.text = element_text(size = 6),
+  guides(fill = "none") +
+  scale_fill_manual(values = mut.color) +
+  scale_alpha_manual(values = alpha) +
+  facet_wrap2(.~V2, nrow = 1, scale = "free_x", drop = TRUE,
+    strip = strip_themed(
+      background_x = list(
+        element_rect(fill = mut.color[1], color = "transparent"),
+        element_rect(fill = mut.color[2], color = "transparent"),
+        element_rect(fill = mut.color[3], color = "transparent"),
+        element_rect(fill = mut.color[4], color = "transparent"),
+        element_rect(fill = mut.color[5], color = "transparent"),
+        element_rect(fill = mut.color[6], color = "transparent")
+        ),
+      text_x = list(
+        element_text(color = "white", face = "bold", size = 6, margin = margin(1, 1, 1, 1))
+        )
+      )
+    ) +
+  geom_text(
+    data = anno,
+    aes(x = x, y = y, label = label),
+    inherit.aes = FALSE,
+    size = 2.4,
+    vjust = 1.1,
+    hjust = 1.1
+  ) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
+  scale_x_discrete(labels = setNames(sbs.df$V3, sbs.df$V1)) +
+  coord_cartesian(clip = "off") +
+  ylab("% SBS") + xlab(x.label) +
+  theme(panel.border = element_blank(),
         strip.background = element_blank(),
-        strip.text = element_text(size = 8),
-        panel.grid = element_blank(),
-        plot.margin = margin(0,0,0,0))
-p2
+        panel.spacing = unit(0, "lines"),
+        legend.position = "none",
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 2),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_text(size = 6),
+        axis.title.y = element_text(size = 8),
+        axis.title.x = element_text(size = 8))
+  
+  return(p1)
+}
 ```
 
-How many SBS95 positives?
+Load SigRescueR result
 ```{r}
-sbs95 <- mSigAct_pd %>% dplyr::filter(signatures == "SBS95") %>%
-  mutate(status = ifelse(value > 0.05, 1, 0))
+## Cleaned PBMC samples with WGA cell line data
+# Rscript /mnt/data1/peter/repo/AAmanu/code/ds_bloodfraction_sr_sbs31.R
 
-table(sbs95$celltype, sbs95$status)
+load("/mnt/storage/peter/repo/manuAA/data/uc14_sr_sbs31/ds_bloodfraction_uc14_sbs31.rda")
+SigRescueR::SigRescueAnalyze(res = res)
+```
 
-sbs95$lineage <- ifelse(sbs95$celltype == "Myeloid", "Myeloid", "Lymphoid")
+```{r}
+plot_reconstructed <- function(id) {
+  fit <- res[[id]]
+  ## extract posterior draws
+  posterior <- rstan::extract(fit$fit)
+  ## extract all theta
+  all_theta <- as.data.frame(posterior$norm_theta_b) %>% ## background activity
+    mutate(norm_theta_t = posterior$norm_theta_t) %>% ## exposure activity
+    sweep(x = ., MARGIN = 1, STATS = rowSums(.), FUN = "/") %>% ## normalize
+    colMeans()
 
-onlypositives <- sbs95 %>% dplyr::filter(status == 1) 
+  ## subset theta based on type (baseline vs treatment)
+  theta_t <- all_theta[length(all_theta)]
+  theta_b <- all_theta[-length(all_theta)]
+  
+  theta_b_ind <- theta_b ## store baseline activity for replicates
+  
+  ## extract inferred exposure signautres
+  s_t <- apply(posterior$s_t, 2, quantile, probs = 0.025) ## treatment-induced profile (latent), selected lower bound. less leaky.
+  s_t <- s_t / sum(s_t) ## normalize 
+  
+  ## Reconstruct Exposure    
+  reconstruct_s_t <- (s_t * theta_t) * sum(fit$s_t)
+  ## Reconstruct background
+  reconstruct_s_b <- sapply(1:length(theta_b), function(x) { 
+    (as.numeric(fit$s_b[,x]) * theta_b[x]) * sum(fit$s_t)
+    })
+  
+  ## Sum all the background together to get one background profile
+  if(ncol(reconstruct_s_b)>1) {
+    reconstruct_s_b <- rowSums(reconstruct_s_b)
+  }
+  
+  ## Generate reconstructed profile
+  reconstruct_s_t.pd <- data.frame(MutationType = samp.cleaned$MutationType,
+                                   value = as.numeric(reconstruct_s_t),
+                                   status = "Exposure")
+  reconstruct_s_b.pd <- data.frame(MutationType = samp.cleaned$MutationType,
+                                   value = as.numeric(reconstruct_s_b),
+                                   status = "Background")
+  
+  reconstructed.pd <- rbind(reconstruct_s_b.pd, reconstruct_s_t.pd)
+  reconstructed.pd$status <- factor(x = reconstructed.pd$status, levels = c("Background", "Exposure"))
+  
+  newlabel <- gsub("UC14_", replacement = "", x = id)
+  
+  p2 <- plotSBS.multialpha(df = reconstructed.pd, estimated_bg = theta_b,
+                           x.label = newlabel, alpha = c(0.5, 1)) #+ theme(plot.margin = margin(0,0,0,0))
+  return(p2)
+}
 
-wilcox.test(value ~ lineage, data = onlypositives)
+p1 <- plot_reconstructed(id = "UC14_B-cell")
+p2 <- plot_reconstructed(id = "UC14_NK-cell")
+p3 <- plot_reconstructed(id = "UC14_Myeloid")
 
-onlypositives %>% dplyr::group_by(lineage) %>% dplyr::summarise(mean = mean(value))
 ```
 
 ```{r}
 layout <- "
-AAAZZZZZ
-AAAZZZZZ
-YYYYYYYY
-YYYYYYYY
-YYYYYYYY
-YYYYYYYY
-YYYYYYYY
-YYYYYYYY
-YYYYYYYY"
+AAABBBCCC
+ZZZZZZZZZ
+ZZZZZZZZZ
+ZZZZZZZZZ
+ZZZZZZZZZ
+ZZZZZZZZZ
+ZZZZZZZZZ
+ZZZZZZZZZ"
 
-set.seed(514)
-combined_plot1 <- p2 + plot_layout(design=layout) + 
+dev.off()
+
+combined_plot1 <- p1 + p2 + p3 + plot_spacer() + plot_layout(design=layout) +
   plot_annotation(tag_levels = list(c(""))) &
   theme(plot.tag = element_text(face = 'bold', size = 10),
         text = element_text(family = "Arial"))
 
-ggsave("/mnt/data1/peter/repo/AAmanu/figure/supplementalfigure11.png", 
+ggsave("/mnt/data1/peter/repo/AAmanu/figure/uc14_sbs31_reconstructed.png", 
+       width = 170, height = 170,
+       units = "mm", dpi = 600)
+
+ggsave("/mnt/data1/peter/repo/AAmanu/figure/for_submission/supplementalfigure11.jpeg", 
        width = 170, height = 170,
        units = "mm", dpi = 600)
 ```
-
-
-
 

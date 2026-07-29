@@ -187,4 +187,8 @@ combined_plot1 <- p2 + plot_layout(design=layout) +
 ggsave("/mnt/data1/peter/repo/AAmanu/figure/supplementalfigure13.png", 
        width = 170, height = 170,
        units = "mm", dpi = 600)
+
+ggsave("/mnt/data1/peter/repo/AAmanu/figure/for_submission/supplementalfigure13.jpeg", 
+       width = 170, height = 170,
+       units = "mm", dpi = 600)
 ```

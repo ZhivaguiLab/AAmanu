@@ -308,5 +308,9 @@ combined_plot1 <- p1 + p4 + p2 + p3 + p8 + plot_spacer() + plot_layout(design=la
 ggsave("/mnt/data1/peter/repo/AAmanu/figure/supplementalfigure9.png", 
        width = 170, height = 170,
        units = "mm", dpi = 600)
+
+ggsave("/mnt/data1/peter/repo/AAmanu/figure/for_submission/supplementalfigure9.jpeg", 
+       width = 170, height = 170,
+       units = "mm", dpi = 600)
 ```
 

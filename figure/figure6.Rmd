@@ -139,7 +139,7 @@ p3 <- ggplot(mSigAct_pd, aes(x = signatures, y = value)) +
         legend.box.margin = margin(0, -5, 0, -5))
 ```
 
-Panel B Forest plot (Analysis and code adapted from Sanskruti)
+Panel C Forest plot (Analysis and code adapted from Sanskruti)
 ```{r}
 glm_results <- read.csv(
   "/home/sanskruti/R/aa_exposure_/SBS22a_GLM_forest_plot_results.csv",
@@ -345,11 +345,9 @@ forest_plot <- ggplot(
   theme(
     axis.text.y = element_text(
       size = 6,
-      color = "black"
     ),
     axis.text.x = element_text(
       size = 6,
-      color = "black"
     ),
     axis.title.x = element_text(
       size = 8
@@ -363,11 +361,6 @@ forest_plot <- ggplot(
     ),
     panel.grid.minor = element_blank(),
     
-    panel.border = element_rect(
-      color = "black",
-      linewidth = 0.8
-    ),
-    
     legend.position = "none",
     
     plot.margin = margin(
@@ -379,7 +372,7 @@ forest_plot <- ggplot(
   )
 ```
 
-Panel C: Complement scWGS with DS
+Panel B: Complement scWGS with DS
 ```{r}
 ## scWGS data; keep only sbs22a attribution
 scWGS_sbs22 <- mSigAct_pd %>% dplyr::filter(signatures == "SBS22a")
@@ -438,21 +431,11 @@ p4 <- ggplot(data = scWGS_sbs22, aes(x = celltype, y = value)) +
 
 ```{r}
 layout <- "
-AAAACCCZ
-AAAACCCZ
-AAAACCCZ
-BBBBCCCZ
-BBBBCCCZ
-YYYYYYYY
-YYYYYYYY
-YYYYYYYY"
-
-layout <- "
 AAAAAZZZ
 AAAAAZZZ
 AAAAAZZZ
-CCBBBZZZ
-CCBBBZZZ
+BBBCCZZZ
+BBBCCZZZ
 YYYYYYYY
 YYYYYYYY
 YYYYYYYY
@@ -460,11 +443,15 @@ YYYYYYYY"
 
 set.seed(425)
 combined_plot1 <- free(p3) + free(p4) + forest_plot + plot_layout(design=layout) + #
-  plot_annotation(tag_levels = list(c("A", "C", "B", "", "", "", ""))) &
+  plot_annotation(tag_levels = list(c("A", "B", "C", "", "", "", ""))) &
   theme(plot.tag = element_text(face = 'bold', size = 10),
         text = element_text(family = "Arial"))
 
 ggsave("/mnt/data1/peter/repo/AAmanu/figure/figure6.png", 
+       width = 170, height = 170,
+       units = "mm", dpi = 600)
+
+ggsave("/mnt/data1/peter/repo/AAmanu/figure/for_submission/figure6.jpeg", 
        width = 170, height = 170,
        units = "mm", dpi = 600)
 ```
